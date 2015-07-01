@@ -33,8 +33,7 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 		IndexDirectory: filepath.Clean(c.Root + string(filepath.Separator) + `index`),
 		IncludePaths:   []*regexp.Regexp{},
 		ExcludePaths:   []*regexp.Regexp{},
-		HTMLRoute:      `/search`,
-		JSONRoute:      `/jsearch`,
+		Endpoint:       `/search`,
 	}
 
 	incPaths := []string{}
@@ -67,17 +66,12 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 				}
 				excPaths = append(excPaths, c.Val())
 				excPaths = append(excPaths, c.RemainingArgs()...)
-			case "htmlroute":
+			case "endpoint":
 				if !c.NextArg() {
 					return nil, c.ArgErr()
 				}
-				conf.HTMLRoute = c.Val()
-			case "jsonroute":
-				if !c.NextArg() {
-					return nil, c.ArgErr()
-				}
-				conf.JSONRoute = c.Val()
-			case "indexdirectory":
+				conf.Endpoint = c.Val()
+			case "datadir":
 				if !c.NextArg() {
 					return nil, c.ArgErr()
 				}
@@ -87,7 +81,7 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 	}
 
 	if len(incPaths) == 0 && len(excPaths) == 0 {
-		incPaths = append(incPaths, "/")
+		incPaths = append(incPaths, "^/")
 	}
 
 	for _, i := range incPaths {

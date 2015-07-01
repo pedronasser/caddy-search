@@ -1,12 +1,17 @@
 package bleve
 
 import (
+	"path/filepath"
+
 	"github.com/blevesearch/bleve"
+	"github.com/pedronasser/caddy-search/indexer"
 	"github.com/pedronasser/go-piper"
 )
 
 // New creates a new instance for this indexer
-func New(name string) (*bleveIndexer, error) {
+func New(config indexer.Config) (*bleveIndexer, error) {
+	name := filepath.Clean(config.IndexDirectory + string(filepath.Separator) + config.HostName)
+
 	blv, err := openIndex(name)
 	if err != nil {
 		return nil, err

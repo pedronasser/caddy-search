@@ -21,6 +21,6 @@ type Record interface {
 
 // Config ...
 type Config struct {
-	Name   string
-	Engine string
+	HostName       string
+	IndexDirectory string
 }

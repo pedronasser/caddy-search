@@ -3,7 +3,6 @@ package search
 import (
 	"encoding/json"
 	"net/http"
-	"path/filepath"
 	"regexp"
 	"time"
 
@@ -18,7 +17,10 @@ func Handler(next middleware.Handler, config *Config) middleware.Handler {
 		return nil
 	}
 
-	index, err := NewIndexer(config.Engine, indexer.Config{Name: filepath.Clean(config.IndexDirectory + string(filepath.Separator) + config.HostName)})
+	index, err := NewIndexer(config.Engine, indexer.Config{
+		HostName:       config.HostName,
+		IndexDirectory: config.IndexDirectory,
+	})
 
 	if err != nil {
 		panic(err)
@@ -36,13 +38,12 @@ type Search struct {
 
 // ServerHTTP is the HTTP handler for this middleware
 func (s *Search) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
-	if r.URL.Path == s.Config.JSONRoute {
-		return s.ServeJSON(w, r)
+	if r.URL.Path == s.Config.Endpoint {
+		if r.Header.Get("Accept") == "application/json" {
+			return s.SearchJSON(w, r)
+		}
+		// return s.SearchHTML(r, r)
 	}
-
-	// if url == s.Config.HTMLRoute {
-	// 	return s.SearchHTML(w, r)
-	// }
 
 	if s.validatePath(r.URL.String()) {
 		record := s.Indexer.Record(r.URL.String())
@@ -62,8 +63,8 @@ type Result struct {
 	Modified time.Time
 }
 
-// ServeJSON ...
-func (s *Search) ServeJSON(w http.ResponseWriter, r *http.Request) (status int, err error) {
+// SearchJSON ...
+func (s *Search) SearchJSON(w http.ResponseWriter, r *http.Request) (status int, err error) {
 	var jresp []byte
 
 	q := r.URL.Query().Get("q")
@@ -134,10 +135,10 @@ func (r *searchResponseWriter) Write(p []byte) (n int, err error) {
 func NewIndexer(engine string, config indexer.Config) (index indexer.Handler, err error) {
 	switch engine {
 	case "bleve":
-		index, err = bleve.New(config.Name)
+		index, err = bleve.New(config)
 		break
 	default:
-		index, err = bleve.New(config.Name)
+		index, err = bleve.New(config)
 		break
 	}
 	return
@@ -148,11 +149,8 @@ type Config struct {
 	HostName       string
 	Engine         string
 	Path           string
-	IncludeCodes   []int
-	ExcludeCodes   []int
 	IncludePaths   []*regexp.Regexp
 	ExcludePaths   []*regexp.Regexp
-	HTMLRoute      string
-	JSONRoute      string
+	Endpoint       string
 	IndexDirectory string
 }
