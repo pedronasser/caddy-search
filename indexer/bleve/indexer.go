@@ -61,13 +61,6 @@ func (i *bleveIndexer) index(in interface{}) interface{} {
 	}
 
 	if rec != nil && rec.body.Len() > 0 {
-		if rec.loaded == false {
-			go func() {
-				i.pipeline.Input() <- rec
-			}()
-			return rec
-		}
-
 		r := indexRecord{
 			Name:     rec.Name(),
 			Body:     rec.body.String(),

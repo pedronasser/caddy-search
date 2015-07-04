@@ -26,6 +26,11 @@ func (r *Record) Modified() time.Time {
 	return r.modified
 }
 
+// Body returns Record's body
+func (r *Record) Body() bytes.Buffer {
+	return *r.body
+}
+
 // Load this record from the indexer.
 func (r *Record) Load() bool {
 	doc, err := r.indexer.bleve.Document(r.name)

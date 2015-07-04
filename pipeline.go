@@ -1,6 +1,8 @@
 package search
 
 import (
+	"log"
+
 	"github.com/pedronasser/caddy-search/indexer"
 	"github.com/pedronasser/go-piper"
 )
@@ -60,7 +62,10 @@ func (p *Pipeline) validate(in interface{}) interface{} {
 // Pipe is the step of the pipeline that pipes valid documents to the indexer.
 func (p *Pipeline) index(in interface{}) interface{} {
 	if record, ok := in.(indexer.Record); ok {
-		record.Load()
+		body := record.Body()
+		for body.Len() == 0 {
+			log.Println("Not written")
+		}
 		go p.indexer.Pipe(record)
 		return in
 	}

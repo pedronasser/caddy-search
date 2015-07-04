@@ -2,6 +2,7 @@ package search
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -93,6 +94,7 @@ func (r *searchResponseWriter) WriteHeader(code int) {
 }
 
 func (r *searchResponseWriter) Write(p []byte) (n int, err error) {
+	log.Println("Writing...")
 	go r.record.Write(p)
 	n, err = r.ResponseWriter.Write(p)
 	return n, err

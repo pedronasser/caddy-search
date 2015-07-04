@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"bytes"
 	"io"
 	"time"
 )
@@ -16,6 +17,7 @@ type Handler interface {
 type Record interface {
 	io.ReadWriter
 	Name() string
+	Body() bytes.Buffer
 	Modified() time.Time
 	Load() bool
 }
