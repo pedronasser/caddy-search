@@ -7,10 +7,10 @@ Middleware for [Caddy](https://caddyserver.com).
 ### Syntax
 
 ```
-search [directory|url "^/"] [endpoint "search/"]
+search [directory|regexp] [endpoint "search/"]
 ```
 * **directory** is the path, relative to site root, to a directory (static content)
-* **url** is the URL [regular expression] of documents that must be indexed (static and dynamic content)
+* **regexp** is the URL [regular expression] of documents that must be indexed (static and dynamic content)
 * **endpoint** is the path, relative to site's root url, of the search endpoint
 
 For more options, use the following syntax:
@@ -21,15 +21,16 @@ search {
     datadir     (default: index)
     endpoint    (default: /search)
 
-    +path       directory or url
-    -path       directory or url
+    +path       directory or regexp
+    -path       directory or regexp
+    ignore      regexp
 }
 ```
 * **engine** is the engine for indexing and searching
 * **datadir** is the directory's path where the indexer should store all data
-
 * **+path** include a path to be indexed (can be added multiple times)
 * **-path** exclude a path from being index (can be added multiple times)
+* **ignore** ignore files that matches the regular expression (can be added multiple times)
 
 Each property in the block is optional.
 
@@ -44,7 +45,7 @@ Index every static content in root folder (single line configuration)
 search /
 ```
 
-Index every dynamic content (single line configuration)
+Index every content (single line configuration)
 ```
 search ^/
 ```
@@ -59,6 +60,7 @@ Multiple static and dynamic paths
 search ^/blog/ {
 	+path /static/docs/
     -path ^/blog/admin/
+    ignore robots.txt
 }
 ```
 

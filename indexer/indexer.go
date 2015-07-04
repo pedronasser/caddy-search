@@ -17,6 +17,7 @@ type Record interface {
 	io.ReadWriter
 	Name() string
 	Modified() time.Time
+	Load() bool
 }
 
 // Config ...

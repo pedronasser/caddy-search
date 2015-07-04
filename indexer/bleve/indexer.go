@@ -21,47 +21,9 @@ type indexRecord struct {
 	Modified string
 }
 
-func (i *bleveIndexer) newRecord(name string) *Record {
-	return &Record{name, nil, bytes.NewBuffer(nil), false, time.Now()}
-}
-
-func (i *bleveIndexer) loadRecord(record *Record) bool {
-	doc, err := i.bleve.Document(record.name)
-	if err != nil || doc == nil {
-		record.loaded = true
-		return false
-	}
-
-	result := make(map[string]interface{})
-
-	for _, field := range doc.Fields {
-		name := field.Name()
-		value := field.Value()
-		result[name] = value
-	}
-
-	strModified := string(result["Modified"].([]byte))
-	modified, err := strconv.Atoi(strModified)
-
-	record.modified = time.Unix(int64(modified), 0)
-	record.document = result
-
-	if record.body.Len() == 0 {
-		body := result["Body"].([]byte)
-		if len(body) > 0 {
-			record.body = bytes.NewBuffer(body)
-		}
-	}
-
-	record.loaded = true
-
-	return true
-}
-
 // Record method get existent or creates a new Record to be saved/updated in the indexer
 func (i *bleveIndexer) Record(name string) indexer.Record {
-	record := i.newRecord(name)
-	go i.loadRecord(record)
+	record := &Record{i, name, nil, bytes.NewBuffer(nil), false, time.Now()}
 	return record
 }
 
@@ -72,8 +34,8 @@ func (i *bleveIndexer) Search(q string) (records []indexer.Record) {
 	result, _ := i.bleve.Search(request)
 
 	for _, match := range result.Hits {
-		rec := i.newRecord(match.ID)
-		loaded := i.loadRecord(rec)
+		rec := i.Record(match.ID)
+		loaded := rec.Load()
 
 		if !loaded {
 			continue
