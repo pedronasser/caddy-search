@@ -13,6 +13,12 @@ type Handler interface {
 	Pipe(Record)
 }
 
+// Config ...
+type Config struct {
+	HostName       string
+	IndexDirectory string
+}
+
 // Record ...
 type Record interface {
 	io.ReadWriter
@@ -20,10 +26,4 @@ type Record interface {
 	Body() bytes.Buffer
 	Modified() time.Time
 	Load() bool
-}
-
-// Config ...
-type Config struct {
-	HostName       string
-	IndexDirectory string
 }
