@@ -2,7 +2,6 @@ package search
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -53,7 +52,7 @@ func (s *Search) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) 
 
 	record := s.Indexer.Record(r.URL.String())
 	go s.Pipeline.Pipe(record)
-	return s.Next.ServeHTTP(&searchResponseWriter{nil, w}, r)
+	return s.Next.ServeHTTP(&searchResponseWriter{w, record}, r)
 }
 
 // Result is the structure for the search result
@@ -85,8 +84,8 @@ func (s *Search) SearchJSON(w http.ResponseWriter, r *http.Request) (status int,
 }
 
 type searchResponseWriter struct {
-	record indexer.Record
 	w      http.ResponseWriter
+	record indexer.Record
 }
 
 func (r *searchResponseWriter) Header() http.Header {
@@ -98,7 +97,6 @@ func (r *searchResponseWriter) WriteHeader(code int) {
 }
 
 func (r *searchResponseWriter) Write(p []byte) (int, error) {
-	fmt.Println("write! ")
 	go r.record.Write(p)
 	n, err := r.w.Write(p)
 	return n, err

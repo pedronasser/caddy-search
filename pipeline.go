@@ -62,7 +62,7 @@ func (p *Pipeline) index(in interface{}) interface{} {
 	if record, ok := in.(indexer.Record); ok {
 		body := record.Body()
 		if body.Len() == 0 {
-			p.Pipe(record)
+			go p.Pipe(record)
 			return nil
 		}
 		go p.indexer.Pipe(record)
