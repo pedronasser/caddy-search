@@ -23,7 +23,14 @@ type indexRecord struct {
 
 // Record method get existent or creates a new Record to be saved/updated in the indexer
 func (i *bleveIndexer) Record(name string) indexer.Record {
-	record := &Record{i, name, nil, bytes.NewBuffer(nil), false, time.Now()}
+	record := &Record{
+		indexer:  i,
+		name:     name,
+		document: nil,
+		body:     bytes.NewBuffer(nil),
+		loaded:   false,
+		modified: time.Now(),
+	}
 	return record
 }
 

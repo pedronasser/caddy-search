@@ -10,18 +10,9 @@ import (
 )
 
 // Handler creates a new handler for the search middleware
-func Handler(next middleware.Handler, config *Config) middleware.Handler {
+func Handler(next middleware.Handler, config *Config, index indexer.Handler) middleware.Handler {
 	if len(config.HostName) == 0 {
 		return nil
-	}
-
-	index, err := NewIndexer(config.Engine, indexer.Config{
-		HostName:       config.HostName,
-		IndexDirectory: config.IndexDirectory,
-	})
-
-	if err != nil {
-		panic(err)
 	}
 
 	ppl, err := NewPipeline(config, index)

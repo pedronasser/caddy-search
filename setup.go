@@ -20,11 +20,29 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 		panic(err)
 	}
 
+	index, err := NewIndexer(config.Engine, indexer.Config{
+		HostName:       config.HostName,
+		IndexDirectory: config.IndexDirectory,
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	c.Startup = append(c.Startup, func() error {
+		return ScanToPipe(config, index)
+	})
+
 	mid = func(next middleware.Handler) middleware.Handler {
-		return Handler(next, config)
+		return Handler(next, config, index)
 	}
 
 	return
+}
+
+// ScanToPipe ...
+func ScanToPipe(config *Config, index indexer.Handler) error {
+	return nil
 }
 
 // NewIndexer creates a new Indexer with the received config

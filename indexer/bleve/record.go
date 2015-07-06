@@ -3,6 +3,7 @@ package bleve
 import (
 	"bytes"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -14,6 +15,7 @@ type Record struct {
 	body     *bytes.Buffer
 	loaded   bool
 	modified time.Time
+	mutex    sync.Mutex
 }
 
 // Name returns Record's name
@@ -28,6 +30,8 @@ func (r *Record) Modified() time.Time {
 
 // Body returns Record's body
 func (r *Record) Body() bytes.Buffer {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	return *r.body
 }
 
