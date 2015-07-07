@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/mholt/caddy/config/setup"
 	"github.com/mholt/caddy/middleware"
@@ -52,7 +51,18 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 // ScanToPipe ...
 func ScanToPipe(fp string, cfg *Config, pipeline *Pipeline, index indexer.Handler) error {
 	filepath.Walk(fp, func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() && !strings.HasPrefix(path, ".") {
+		if info.Name() == "." {
+			return nil
+		}
+
+		if info.Name() == "" || info.Name()[0] == '.' {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if !info.IsDir() {
 			reqPath, err := filepath.Rel(fp, path)
 			if err != nil {
 				return err
