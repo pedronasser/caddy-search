@@ -10,31 +10,21 @@ import (
 )
 
 // Handler creates a new handler for the search middleware
-func Handler(next middleware.Handler, config *Config, index indexer.Handler) middleware.Handler {
-	if len(config.HostName) == 0 {
-		return nil
-	}
-
-	ppl, err := NewPipeline(config, index)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return &Search{next, config, ppl, index}
+func Handler(next middleware.Handler, config *Config, index indexer.Handler, pipeline *Pipeline) middleware.Handler {
+	return &Search{next, config, index, pipeline}
 }
 
 // Search represents this middleware structure
 type Search struct {
 	Next middleware.Handler
 	*Config
-	*Pipeline
 	Indexer indexer.Handler
+	*Pipeline
 }
 
 // ServerHTTP is the HTTP handler for this middleware
 func (s *Search) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
-	if r.URL.Path == s.Config.Endpoint {
+	if middleware.Path(r.URL.Path).Matches(s.Config.Endpoint) {
 		if r.Header.Get("Accept") == "application/json" {
 			return s.SearchJSON(w, r)
 		}

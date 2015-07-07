@@ -71,6 +71,8 @@ func (r *Record) Load() bool {
 
 // Write is the writing method for a Record
 func (r *Record) Write(p []byte) (n int, err error) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	if r.body.Len() == 0 {
 		r.body = bytes.NewBuffer(p)
 		return r.body.Len(), nil

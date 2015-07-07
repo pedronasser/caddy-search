@@ -1,6 +1,7 @@
 package search
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,19 +30,48 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 		panic(err)
 	}
 
+	ppl, err := NewPipeline(config, index)
+
+	if err != nil {
+		panic(err)
+	}
+
 	c.Startup = append(c.Startup, func() error {
-		return ScanToPipe(config, index)
+		return ScanToPipe(c.Root, config, ppl, index)
 	})
 
 	mid = func(next middleware.Handler) middleware.Handler {
-		return Handler(next, config, index)
+		return Handler(next, config, index, ppl)
 	}
 
 	return
 }
 
 // ScanToPipe ...
-func ScanToPipe(config *Config, index indexer.Handler) error {
+func ScanToPipe(fp string, cfg *Config, pipeline *Pipeline, index indexer.Handler) error {
+	filepath.Walk(fp, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			reqPath, err := filepath.Rel(fp, path)
+			if err != nil {
+				return err
+			}
+			reqPath = "/" + reqPath
+
+			if pipeline.ValidatePath(reqPath) {
+				body, err := ioutil.ReadFile(path)
+				if err != nil {
+					return err
+				}
+
+				record := index.Record(reqPath)
+				record.Write(body)
+				pipeline.Pipe(record)
+			}
+		}
+
+		return nil
+	})
+
 	return nil
 }
 
@@ -65,7 +95,6 @@ type Config struct {
 	Path           string
 	IncludePaths   []*regexp.Regexp
 	ExcludePaths   []*regexp.Regexp
-	Ignore         []*regexp.Regexp
 	Endpoint       string
 	IndexDirectory string
 }
@@ -78,13 +107,11 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 		IndexDirectory: filepath.Clean(c.Root + string(filepath.Separator) + `index`),
 		IncludePaths:   []*regexp.Regexp{},
 		ExcludePaths:   []*regexp.Regexp{},
-		Ignore:         []*regexp.Regexp{},
 		Endpoint:       `/search`,
 	}
 
 	incPaths := []string{}
 	excPaths := []string{}
-	ignore := []string{}
 
 	for c.Next() {
 
@@ -113,12 +140,6 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 				}
 				excPaths = append(excPaths, c.Val())
 				excPaths = append(excPaths, c.RemainingArgs()...)
-			case "ignore":
-				if !c.NextArg() {
-					return nil, c.ArgErr()
-				}
-				ignore = append(ignore, c.Val())
-				ignore = append(ignore, c.RemainingArgs()...)
 			case "endpoint":
 				if !c.NextArg() {
 					return nil, c.ArgErr()
@@ -133,13 +154,12 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 		}
 	}
 
-	if len(incPaths) == 0 && len(excPaths) == 0 {
+	if len(incPaths) == 0 {
 		incPaths = append(incPaths, "^/")
 	}
 
 	conf.IncludePaths = convertToRegExp(incPaths)
 	conf.ExcludePaths = convertToRegExp(excPaths)
-	conf.Ignore = convertToRegExp(ignore)
 
 	dir := conf.IndexDirectory
 	if _, err := os.Stat(dir); os.IsNotExist(err) {

@@ -21,16 +21,14 @@ search {
     datadir     (default: index)
     endpoint    (default: /search)
 
-    +path       directory or regexp
-    -path       directory or regexp
-    ignore      regexp
+    +path       regexp
+    -path       regexp
 }
 ```
 * **engine** is the engine for indexing and searching
 * **datadir** is the directory's path where the indexer should store all data
 * **+path** include a path to be indexed (can be added multiple times)
 * **-path** exclude a path from being index (can be added multiple times)
-* **ignore** ignore files that matches the regular expression (can be added multiple times)
 
 Each property in the block is optional.
 
@@ -60,7 +58,7 @@ Multiple static and dynamic paths
 search ^/blog/ {
 	+path /static/docs/
     -path ^/blog/admin/
-    ignore robots.txt
+    -path robots.txt
 }
 ```
 
