@@ -1,10 +1,12 @@
 package search
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/mholt/caddy/config/setup"
 	"github.com/mholt/caddy/middleware"
@@ -50,12 +52,13 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 // ScanToPipe ...
 func ScanToPipe(fp string, cfg *Config, pipeline *Pipeline, index indexer.Handler) error {
 	filepath.Walk(fp, func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
+		if !info.IsDir() && !strings.HasPrefix(path, ".") {
 			reqPath, err := filepath.Rel(fp, path)
 			if err != nil {
 				return err
 			}
 			reqPath = "/" + reqPath
+			fmt.Println(reqPath)
 
 			if pipeline.ValidatePath(reqPath) {
 				body, err := ioutil.ReadFile(path)
@@ -164,7 +167,7 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 	dir := conf.IndexDirectory
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-			return nil, c.Err("Given `indexdirectory` is not a valid path.")
+			return nil, c.Err("Given `datadir` not a valid path.")
 		}
 	}
 
