@@ -1,7 +1,6 @@
 package bleve
 
 import (
-	"bytes"
 	"strconv"
 	"time"
 
@@ -15,19 +14,22 @@ type bleveIndexer struct {
 	bleve    bleve.Index
 }
 
+// Bleve's record data struct
 type indexRecord struct {
-	Name     string
+	Path     string
+	Title    string
 	Body     string
 	Modified string
 }
 
 // Record method get existent or creates a new Record to be saved/updated in the indexer
-func (i *bleveIndexer) Record(name string) indexer.Record {
+func (i *bleveIndexer) Record(path string) indexer.Record {
 	record := &Record{
 		indexer:  i,
-		name:     name,
+		path:     path,
+		title:    "",
 		document: nil,
-		body:     bytes.NewBuffer(nil),
+		body:     []byte{},
 		loaded:   false,
 		modified: time.Now(),
 	}
@@ -38,6 +40,7 @@ func (i *bleveIndexer) Record(name string) indexer.Record {
 func (i *bleveIndexer) Search(q string) (records []indexer.Record) {
 	query := bleve.NewQueryStringQuery(q)
 	request := bleve.NewSearchRequest(query)
+	request.Highlight = bleve.NewHighlight()
 	result, _ := i.bleve.Search(request)
 
 	for _, match := range result.Hits {
@@ -46,6 +49,10 @@ func (i *bleveIndexer) Search(q string) (records []indexer.Record) {
 
 		if !loaded {
 			continue
+		}
+
+		if len(match.Fragments["Body"]) > 0 {
+			rec.SetBody([]byte(match.Fragments["Body"][0]))
 		}
 
 		records = append(records, rec)
@@ -67,14 +74,15 @@ func (i *bleveIndexer) index(in interface{}) interface{} {
 		rec = in.(*Record)
 	}
 
-	if rec != nil && rec.body.Len() > 0 {
+	if rec != nil && len(rec.body) > 0 {
 		r := indexRecord{
-			Name:     rec.Name(),
-			Body:     rec.body.String(),
+			Path:     rec.Path(),
+			Title:    rec.Title(),
+			Body:     string(rec.body),
 			Modified: strconv.Itoa(int(time.Now().Unix())),
 		}
 
-		i.bleve.Index(rec.Name(), r)
+		i.bleve.Index(rec.Path(), r)
 	}
 
 	return nil

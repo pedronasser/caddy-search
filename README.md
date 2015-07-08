@@ -26,7 +26,7 @@ search {
 }
 ```
 * **engine** is the engine for indexing and searching
-* **datadir** is the directory's path where the indexer should store all data
+* **datadir** is the absolute path to where the indexer should store all data
 * **+path** include a path to be indexed (can be added multiple times)
 * **-path** exclude a path from being index (can be added multiple times)
 

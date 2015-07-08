@@ -39,6 +39,8 @@ func (s *Search) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) 
 // Result is the structure for the search result
 type Result struct {
 	Path     string
+	Title    string
+	Body     string
 	Modified time.Time
 }
 
@@ -52,7 +54,13 @@ func (s *Search) SearchJSON(w http.ResponseWriter, r *http.Request) (status int,
 	results := make([]Result, len(indexResult))
 
 	for i, result := range indexResult {
-		results[i] = Result{result.Name(), result.Modified()}
+		body := result.Body()
+		results[i] = Result{
+			Path:     result.Path(),
+			Title:    result.Title(),
+			Modified: result.Modified(),
+			Body:     string(body),
+		}
 	}
 
 	jresp, err = json.Marshal(results)
@@ -78,7 +86,7 @@ func (r *searchResponseWriter) WriteHeader(code int) {
 }
 
 func (r *searchResponseWriter) Write(p []byte) (int, error) {
-	go r.record.Write(p)
+	defer r.record.Write(p)
 	n, err := r.w.Write(p)
 	return n, err
 }

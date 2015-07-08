@@ -1,7 +1,6 @@
 package search
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -68,7 +67,6 @@ func ScanToPipe(fp string, cfg *Config, pipeline *Pipeline, index indexer.Handle
 				return err
 			}
 			reqPath = "/" + reqPath
-			fmt.Println(reqPath)
 
 			if pipeline.ValidatePath(reqPath) {
 				body, err := ioutil.ReadFile(path)
@@ -117,7 +115,7 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 	conf = &Config{
 		HostName:       c.Address(),
 		Engine:         `bleve`,
-		IndexDirectory: filepath.Clean(c.Root + string(filepath.Separator) + `index`),
+		IndexDirectory: `/tmp/caddyIndex`,
 		IncludePaths:   []*regexp.Regexp{},
 		ExcludePaths:   []*regexp.Regexp{},
 		Endpoint:       `/search`,

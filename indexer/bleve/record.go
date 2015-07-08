@@ -1,7 +1,6 @@
 package bleve
 
 import (
-	"bytes"
 	"strconv"
 	"sync"
 	"time"
@@ -10,17 +9,28 @@ import (
 // Record handles indexer's data
 type Record struct {
 	indexer  *bleveIndexer
-	name     string
+	path     string
+	title    string
 	document map[string]interface{}
-	body     *bytes.Buffer
+	body     []byte
 	loaded   bool
 	modified time.Time
 	mutex    sync.Mutex
 }
 
-// Name returns Record's name
-func (r *Record) Name() string {
-	return r.name
+// Path returns Record's path
+func (r *Record) Path() string {
+	return r.path
+}
+
+// Title returns Record's title
+func (r *Record) Title() string {
+	return r.title
+}
+
+// SetTitle replaces Record's title
+func (r *Record) SetTitle(title string) {
+	r.title = title
 }
 
 // Modified returns Record's Modified
@@ -29,15 +39,20 @@ func (r *Record) Modified() time.Time {
 }
 
 // Body returns Record's body
-func (r *Record) Body() bytes.Buffer {
+func (r *Record) Body() []byte {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	return *r.body
+	return r.body
+}
+
+// SetBody replaces Record's body
+func (r *Record) SetBody(body []byte) {
+	r.body = body
 }
 
 // Load this record from the indexer.
 func (r *Record) Load() bool {
-	doc, err := r.indexer.bleve.Document(r.name)
+	doc, err := r.indexer.bleve.Document(r.path)
 	if err != nil || doc == nil {
 		r.loaded = true
 		return false
@@ -57,12 +72,11 @@ func (r *Record) Load() bool {
 	r.modified = time.Unix(int64(modified), 0)
 	r.document = result
 
-	if r.body.Len() == 0 {
-		body := result["Body"].([]byte)
-		if len(body) > 0 {
-			r.body = bytes.NewBuffer(body)
-		}
+	if len(r.body) == 0 {
+		r.body = result["Body"].([]byte)
 	}
+
+	r.title = string(result["Title"].([]byte))
 
 	r.loaded = true
 
@@ -70,17 +84,11 @@ func (r *Record) Load() bool {
 }
 
 // Write is the writing method for a Record
-func (r *Record) Write(p []byte) (n int, err error) {
+func (r *Record) Write(p []byte) (int, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	if r.body.Len() == 0 {
-		r.body = bytes.NewBuffer(p)
-		return r.body.Len(), nil
-	}
-	return
-}
 
-// Read is the reading method for a Record
-func (r *Record) Read(p []byte) (n int, err error) {
-	return r.body.Read(p)
+	r.body = append(r.body, p...)
+
+	return len(r.body), nil
 }

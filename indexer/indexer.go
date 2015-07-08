@@ -1,7 +1,6 @@
 package indexer
 
 import (
-	"bytes"
 	"io"
 	"time"
 )
@@ -21,9 +20,12 @@ type Config struct {
 
 // Record ...
 type Record interface {
-	io.ReadWriter
-	Name() string
-	Body() bytes.Buffer
+	io.Writer
+	Path() string
+	Title() string
+	SetTitle(string)
+	Body() []byte
+	SetBody([]byte)
 	Modified() time.Time
 	Load() bool
 }

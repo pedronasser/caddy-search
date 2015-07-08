@@ -2,6 +2,7 @@ package bleve
 
 import (
 	"path/filepath"
+	"time"
 
 	"github.com/blevesearch/bleve"
 	"github.com/pedronasser/caddy-search/indexer"
@@ -59,7 +60,12 @@ func openIndex(name string) (bleve.Index, error) {
 }
 
 func consumeOutput(pipe piper.Handler) {
+	tick := time.NewTicker(1 * time.Second)
+	out := pipe.Output()
 	for {
-		<-pipe.Output()
+		select {
+		case <-out:
+		case <-tick.C:
+		}
 	}
 }
