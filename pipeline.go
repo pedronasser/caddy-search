@@ -84,9 +84,11 @@ func (p *Pipeline) parse(in interface{}) interface{} {
 		title, err := getHTMLContent(body, titleTag)
 		if err == nil {
 			record.SetTitle(title)
+			return record
+		} else {
+			// only accept html files
+			return err
 		}
-
-		return record
 	}
 
 	return nil

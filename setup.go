@@ -183,15 +183,15 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 }
 
 func convertToRegExp(rexp []string) (r []*regexp.Regexp) {
-	r = make([]*regexp.Regexp, len(rexp))
-	for i, exp := range rexp {
+	r = make([]*regexp.Regexp, 0)
+	for _, exp := range rexp {
 		var rule *regexp.Regexp
 		var err error
 		rule, err = regexp.Compile(exp)
 		if err != nil {
 			continue
 		}
-		r[i] = rule
+		r = append(r, rule)
 	}
 	return
 }

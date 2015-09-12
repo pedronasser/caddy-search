@@ -53,6 +53,13 @@ Indexing every dynamic content with a different endpoint (single line configurat
 search /(.*) /mySearch
 ```
 
+Ignoring specific type of file
+```
+search {
+    -path \.pdf$
+}
+```
+
 Multiple static and dynamic paths
 ```
 search ^/blog/ {
