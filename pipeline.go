@@ -3,7 +3,6 @@ package search
 import (
 	"bytes"
 	"io"
-	"log"
 	"time"
 
 	"github.com/pedronasser/caddy-search/indexer"
@@ -53,7 +52,6 @@ type Pipeline struct {
 
 // Pipe is the step of the pipeline that pipes valid documents to the indexer.
 func (p *Pipeline) Pipe(record indexer.Record) {
-	log.Println(record.Path())
 	p.pipe.Input() <- record
 }
 
