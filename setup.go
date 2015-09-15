@@ -18,7 +18,7 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 
 	config, err = parseSearch(c)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	index, err := NewIndexer(config.Engine, indexer.Config{
@@ -27,13 +27,13 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 	})
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	ppl, err := NewPipeline(config, index)
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	c.Startup = append(c.Startup, func() error {
