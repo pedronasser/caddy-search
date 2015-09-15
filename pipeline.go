@@ -2,8 +2,8 @@ package search
 
 import (
 	"bytes"
-	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/pedronasser/caddy-search/indexer"
@@ -53,6 +53,7 @@ type Pipeline struct {
 
 // Pipe is the step of the pipeline that pipes valid documents to the indexer.
 func (p *Pipeline) Pipe(record indexer.Record) {
+	log.Println(record.Path())
 	p.pipe.Input() <- record
 }
 
@@ -126,7 +127,6 @@ func getHTMLContent(r io.Reader, tag []byte) (result string, err error) {
 // index is the step of the pipeline that pipes valid documents to the indexer.
 func (p *Pipeline) index(in interface{}) interface{} {
 	if record, ok := in.(indexer.Record); ok {
-		fmt.Println("Indexing:", record.Path())
 		go p.indexer.Pipe(record)
 		return in
 	}

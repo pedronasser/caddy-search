@@ -75,7 +75,11 @@ func ScanToPipe(fp string, cfg *Config, pipeline *Pipeline, index indexer.Handle
 				}
 
 				record := index.Record(reqPath)
-				record.Write(body)
+				if len(body) > 0 {
+					record.Write(body)
+				} else {
+					record.Ignore()
+				}
 				pipeline.Pipe(record)
 			}
 		}
