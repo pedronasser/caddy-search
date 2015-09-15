@@ -33,7 +33,13 @@ func (s *Search) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) 
 
 	record := s.Indexer.Record(r.URL.String())
 	go s.Pipeline.Pipe(record)
-	return s.Next.ServeHTTP(&searchResponseWriter{w, record}, r)
+
+	status, err := s.Next.ServeHTTP(&searchResponseWriter{w, record}, r)
+	if status != 200 {
+		record.Ignore()
+	}
+
+	return status, err
 }
 
 // Result is the structure for the search result
