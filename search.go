@@ -82,6 +82,9 @@ func (r *searchResponseWriter) Header() http.Header {
 }
 
 func (r *searchResponseWriter) WriteHeader(code int) {
+	if code != 200 {
+		r.record.Ignore()
+	}
 	r.w.WriteHeader(code)
 }
 

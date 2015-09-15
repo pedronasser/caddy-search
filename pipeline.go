@@ -61,7 +61,7 @@ func (p *Pipeline) Pipe(record indexer.Record) {
 func (p *Pipeline) validate(in interface{}) interface{} {
 	if record, ok := in.(indexer.Record); ok {
 		body := record.Body()
-		if len(body) == 0 {
+		if len(body) == 0 && !record.Ignored() {
 			go p.Pipe(record)
 			return nil
 		}

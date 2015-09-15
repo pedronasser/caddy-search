@@ -15,7 +15,8 @@ type Record struct {
 	body     []byte
 	loaded   bool
 	modified time.Time
-	mutex    sync.Mutex
+	mutex    sync.RWMutex
+	ignored  bool
 }
 
 // Path returns Record's path
@@ -91,4 +92,20 @@ func (r *Record) Write(p []byte) (int, error) {
 	r.body = append(r.body, p...)
 
 	return len(r.body), nil
+}
+
+// Ignore flag this record as ignored
+func (r *Record) Ignore() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	r.ignored = true
+}
+
+// Ignored returns if this record is ignored
+func (r *Record) Ignored() bool {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	return r.ignored
 }

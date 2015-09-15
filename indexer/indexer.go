@@ -28,4 +28,6 @@ type Record interface {
 	SetBody([]byte)
 	Modified() time.Time
 	Load() bool
+	Ignore()
+	Ignored() bool
 }
