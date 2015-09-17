@@ -1,6 +1,7 @@
 package search
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -8,11 +9,6 @@ import (
 	"github.com/mholt/caddy/middleware"
 	"github.com/pedronasser/caddy-search/indexer"
 )
-
-// Handler creates a new handler for the search middleware
-func Handler(next middleware.Handler, config *Config, index indexer.Handler, pipeline *Pipeline) middleware.Handler {
-	return &Search{next, config, index, pipeline}
-}
 
 // Search represents this middleware structure
 type Search struct {
@@ -28,14 +24,14 @@ func (s *Search) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) 
 		if r.Header.Get("Accept") == "application/json" {
 			return s.SearchJSON(w, r)
 		}
-		return s.SearchJSON(w, r)
+		return s.SearchHTML(w, r)
 	}
 
 	record := s.Indexer.Record(r.URL.String())
 	go s.Pipeline.Pipe(record)
 
 	status, err := s.Next.ServeHTTP(&searchResponseWriter{w, record}, r)
-	if status != 200 {
+	if status != http.StatusOK {
 		record.Ignore()
 	}
 
@@ -50,10 +46,8 @@ type Result struct {
 	Modified time.Time
 }
 
-// SearchJSON ...
-func (s *Search) SearchJSON(w http.ResponseWriter, r *http.Request) (status int, err error) {
-	var jresp []byte
-
+// SearchJSON renders the search results in JSON format
+func (s *Search) SearchJSON(w http.ResponseWriter, r *http.Request) (int, error) {
 	q := r.URL.Query().Get("q")
 	indexResult := s.Indexer.Search(q)
 
@@ -69,13 +63,56 @@ func (s *Search) SearchJSON(w http.ResponseWriter, r *http.Request) (status int,
 		}
 	}
 
-	jresp, err = json.Marshal(results)
+	jresp, err := json.Marshal(results)
 	if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	}
 
 	w.Write(jresp)
-	return 200, err
+	return http.StatusOK, err
+}
+
+// SearchHTML renders the search results in the HTML template
+func (s *Search) SearchHTML(w http.ResponseWriter, r *http.Request) (int, error) {
+	q := r.URL.Query().Get("q")
+	indexResult := s.Indexer.Search(q)
+
+	results := make([]Result, len(indexResult))
+
+	for i, result := range indexResult {
+		results[i] = Result{
+			Path:     result.Path(),
+			Title:    result.Title(),
+			Modified: result.Modified(),
+			Body:     string(result.Body()),
+		}
+	}
+
+	qresults := QueryResults{
+		Context: middleware.Context{
+			Root: http.Dir(s.SiteRoot),
+			Req:  r,
+			URL:  r.URL,
+		},
+		Query:   q,
+		Results: results,
+	}
+
+	var buf bytes.Buffer
+	err := s.Template.Execute(&buf, qresults)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	buf.WriteTo(w)
+	return http.StatusOK, nil
+}
+
+type QueryResults struct {
+	middleware.Context
+	Query   string
+	Results []Result
 }
 
 type searchResponseWriter struct {
@@ -88,7 +125,7 @@ func (r *searchResponseWriter) Header() http.Header {
 }
 
 func (r *searchResponseWriter) WriteHeader(code int) {
-	if code != 200 {
+	if code != http.StatusOK {
 		r.record.Ignore()
 	}
 	r.w.WriteHeader(code)
