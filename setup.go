@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"text/template"
 
 	"github.com/mholt/caddy/config/setup"
 	"github.com/mholt/caddy/middleware"
@@ -37,18 +38,23 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 	}
 
 	c.Startup = append(c.Startup, func() error {
-		return ScanToPipe(c.Root, config, ppl, index)
+		return ScanToPipe(c.Root, ppl, index)
 	})
 
 	mid = func(next middleware.Handler) middleware.Handler {
-		return Handler(next, config, index, ppl)
+		return &Search{
+			Next:     next,
+			Config:   config,
+			Indexer:  index,
+			Pipeline: ppl,
+		}
 	}
 
 	return
 }
 
 // ScanToPipe ...
-func ScanToPipe(fp string, cfg *Config, pipeline *Pipeline, index indexer.Handler) error {
+func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) error {
 	filepath.Walk(fp, func(path string, info os.FileInfo, err error) error {
 		if info.Name() == "." {
 			return nil
@@ -112,24 +118,26 @@ type Config struct {
 	ExcludePaths   []*regexp.Regexp
 	Endpoint       string
 	IndexDirectory string
+	Template       *template.Template
+	SiteRoot       string
 }
 
 // parseSearch controller information to create a IndexSearch config
-func parseSearch(c *setup.Controller) (conf *Config, err error) {
-	conf = &Config{
+func parseSearch(c *setup.Controller) (*Config, error) {
+	conf := &Config{
 		HostName:       c.Address(),
 		Engine:         `bleve`,
 		IndexDirectory: `/tmp/caddyIndex`,
 		IncludePaths:   []*regexp.Regexp{},
 		ExcludePaths:   []*regexp.Regexp{},
 		Endpoint:       `/search`,
+		SiteRoot:       c.Root,
 	}
 
 	incPaths := []string{}
 	excPaths := []string{}
 
 	for c.Next() {
-
 		args := c.RemainingArgs()
 
 		if len(args) == 1 {
@@ -165,6 +173,19 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 					return nil, c.ArgErr()
 				}
 				conf.IndexDirectory = c.Val()
+			case "template":
+				var err error
+				if c.NextArg() {
+					conf.Template, err = template.ParseFiles(filepath.Join(conf.SiteRoot, c.Val()))
+					if err != nil {
+						return nil, err
+					}
+				} else {
+					conf.Template, err = template.New("search-results").Parse(defaultTemplate)
+					if err != nil {
+						return nil, err
+					}
+				}
 			}
 		}
 	}
@@ -179,11 +200,11 @@ func parseSearch(c *setup.Controller) (conf *Config, err error) {
 	dir := conf.IndexDirectory
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-			return nil, c.Err("Given `datadir` not a valid path.")
+			return nil, c.Err("Given 'datadir' not a valid path.")
 		}
 	}
 
-	return
+	return conf, nil
 }
 
 func convertToRegExp(rexp []string) (r []*regexp.Regexp) {
@@ -199,3 +220,80 @@ func convertToRegExp(rexp []string) (r []*regexp.Regexp) {
 	}
 	return
 }
+
+// The default template to use when serving up HTML search results
+const defaultTemplate = `<!DOCTYPE html>
+<html>
+	<head>
+		<title>Search results for: {{.Query}}</title>
+		<meta charset="utf-8">
+<style>
+body {
+	padding: 1% 2%;
+	font: 16px Arial;
+}
+
+form {
+	margin-bottom: 3em;
+}
+
+input {
+	font-size: 14px;
+	border: 1px solid #CCC;
+	background: #FFF;
+	line-height: 1.5em;
+	padding: 5px;
+}
+
+input[name=q] {
+	width: 100%;
+	max-width: 350px;
+}
+
+input[type=submit] {
+	border-radius: 5px;
+	padding: 5px 10px;
+}
+
+p,
+li {
+	max-width: 600px;
+}
+
+.result-title {
+	font-size: 18px;
+}
+
+.result-url {
+	font-size: 14px;
+	margin-bottom: 5px;
+	color: #777;
+}
+
+li {
+	margin-top: 15px;
+}
+</style>
+	</head>
+	<body>
+		<h1>Site Search</h1>
+
+		<form method="GET" action="{{.URL.Path}}">
+			<input type="text" name="q" value="{{.Query}}"> <input type="submit" value="Search">
+		</form>
+
+		<p>
+			Found <b>{{len .Results}}</b> result{{if ne (len .Results) 1}}s{{end}} for <b>{{.Query}}</b>
+		</p>
+
+		<ol>
+			{{range .Results}}
+			<li>
+				<div class="result-title"><a href="{{.Path}}">{{.Title}}</a></div>
+				<div class="result-url">{{$.Req.Host}}{{.Path}}</div>
+				{{.Body}}
+			</li>
+			{{end}}
+		</ol>
+	</body>
+</html>`
