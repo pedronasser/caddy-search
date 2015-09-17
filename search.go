@@ -21,7 +21,7 @@ type Search struct {
 // ServerHTTP is the HTTP handler for this middleware
 func (s *Search) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	if middleware.Path(r.URL.Path).Matches(s.Config.Endpoint) {
-		if r.Header.Get("Accept") == "application/json" {
+		if r.Header.Get("Accept") == "application/json" || s.Config.Template == nil {
 			return s.SearchJSON(w, r)
 		}
 		return s.SearchHTML(w, r)
@@ -99,7 +99,7 @@ func (s *Search) SearchHTML(w http.ResponseWriter, r *http.Request) (int, error)
 	}
 
 	var buf bytes.Buffer
-	err := s.Template.Execute(&buf, qresults)
+	err := s.Config.Template.Execute(&buf, qresults)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
