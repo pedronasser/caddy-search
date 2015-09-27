@@ -20,6 +20,7 @@ search {
     engine      (default: bleve)
     datadir     (default: index)
     endpoint    (default: /search)
+    template    (default: nil)
 
     +path       regexp
     -path       regexp
@@ -27,6 +28,7 @@ search {
 ```
 * **engine** is the engine for indexing and searching
 * **datadir** is the absolute path to where the indexer should store all data
+* **template** is the path to the search's HTML result's template
 * **+path** include a path to be indexed (can be added multiple times)
 * **-path** exclude a path from being index (can be added multiple times)
 

@@ -132,6 +132,7 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 		ExcludePaths:   []*regexp.Regexp{},
 		Endpoint:       `/search`,
 		SiteRoot:       c.Root,
+		Template:       nil,
 	}
 
 	incPaths := []string{}
@@ -180,11 +181,6 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 					if err != nil {
 						return nil, err
 					}
-				} else {
-					conf.Template, err = template.New("search-results").Parse(defaultTemplate)
-					if err != nil {
-						return nil, err
-					}
 				}
 			}
 		}
@@ -201,6 +197,14 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 			return nil, c.Err("Given 'datadir' not a valid path.")
+		}
+	}
+
+	if conf.Template == nil {
+		var err error
+		conf.Template, err = template.New("search-results").Parse(defaultTemplate)
+		if err != nil {
+			return nil, err
 		}
 	}
 
