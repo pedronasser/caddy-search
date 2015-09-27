@@ -3,6 +3,8 @@ package search
 import (
 	"bytes"
 	"io"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/pedronasser/caddy-search/indexer"
@@ -116,11 +118,17 @@ func (p *Pipeline) parse(in interface{}) interface{} {
 		body := bytes.NewReader(record.Body())
 		title, err := getHTMLContent(body, titleTag)
 		if err == nil {
+			// html file
 			record.SetTitle(title)
 			record.SetBody(stripHTML(record.Body()))
 			return record
+		} else if strings.HasSuffix(record.Path(), ".txt") || strings.HasSuffix(record.Path(), ".md") {
+			// TODO: We can improve file type detection; this is a very limited subset of indexable file types
+			// text or markdown file
+			record.SetTitle(path.Base(record.Path()))
+			record.SetBody(record.Body())
+			return record
 		} else {
-			// only accept html files
 			return err
 		}
 	}
