@@ -41,7 +41,10 @@ func (i *bleveIndexer) Search(q string) (records []indexer.Record) {
 	query := bleve.NewQueryStringQuery(q)
 	request := bleve.NewSearchRequest(query)
 	request.Highlight = bleve.NewHighlight()
-	result, _ := i.bleve.Search(request)
+	result, err := i.bleve.Search(request)
+	if err != nil { // an empty query would cause this
+		return
+	}
 
 	for _, match := range result.Hits {
 		rec := i.Record(match.ID)
