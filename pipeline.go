@@ -75,6 +75,40 @@ func (p *Pipeline) validate(in interface{}) interface{} {
 
 var titleTag = []byte("title")
 
+// stripHTML returns s without HTML tags. It is fairly
+// naive but works for most valid HTML inputs.
+func stripHTML(s []byte) []byte {
+	var buf bytes.Buffer
+	var inTag, inQuotes bool
+	var tagStart int
+	for i, ch := range s {
+		if inTag {
+			if ch == '>' && !inQuotes {
+				inTag = false
+			} else if ch == '<' && !inQuotes {
+				// false start
+				buf.Write(s[tagStart:i])
+				tagStart = i
+			} else if ch == '"' {
+				inQuotes = !inQuotes
+			}
+			continue
+		}
+		if ch == '<' {
+			inTag = true
+			tagStart = i
+			continue
+		}
+		buf.WriteByte(ch)
+	}
+	if inTag {
+		// false start
+		buf.Write(s[tagStart:])
+		inTag = false
+	}
+	return buf.Bytes()
+}
+
 // parse is the step of the pipeline that tries to parse documents and get
 // important information
 func (p *Pipeline) parse(in interface{}) interface{} {
@@ -83,6 +117,7 @@ func (p *Pipeline) parse(in interface{}) interface{} {
 		title, err := getHTMLContent(body, titleTag)
 		if err == nil {
 			record.SetTitle(title)
+			record.SetBody(stripHTML(record.Body()))
 			return record
 		} else {
 			// only accept html files
