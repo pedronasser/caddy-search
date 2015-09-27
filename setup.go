@@ -286,6 +286,7 @@ li {
 			<input type="text" name="q" value="{{.Query}}"> <input type="submit" value="Search">
 		</form>
 
+		{{if .Query}}
 		<p>
 			Found <b>{{len .Results}}</b> result{{if ne (len .Results) 1}}s{{end}} for <b>{{.Query}}</b>
 		</p>
@@ -299,5 +300,6 @@ li {
 			</li>
 			{{end}}
 		</ol>
+		{{end}}
 	</body>
 </html>`
