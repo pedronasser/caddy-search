@@ -1,7 +1,6 @@
 package bleve
 
 import (
-	"log"
 	"strconv"
 	"time"
 
@@ -79,7 +78,6 @@ func (i *bleveIndexer) index(in interface{}) interface{} {
 	}
 
 	if rec != nil && len(rec.body) > 0 {
-		log.Println(rec.Path())
 		rec.SetIndexed(time.Now())
 
 		r := indexRecord{
