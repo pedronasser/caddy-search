@@ -2,7 +2,6 @@ package search
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -45,12 +44,14 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 	})
 
 	expire := time.NewTicker(config.Expire)
+
 	go func() {
 		for {
 			select {
 			case <-expire.C:
-				log.Println("Search expired. Reindexing...")
-				ScanToPipe(c.Root, ppl, index)
+				if !lastScanned.Indexed().IsZero() || lastScanned.Ignored() {
+					ScanToPipe(c.Root, ppl, index)
+				}
 			}
 		}
 	}()
@@ -66,6 +67,8 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 
 	return
 }
+
+var lastScanned indexer.Record
 
 // ScanToPipe ...
 func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) error {
@@ -95,12 +98,14 @@ func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) error {
 				}
 
 				record := index.Record(reqPath)
+				record.SetModified(info.ModTime())
 				if len(body) > 0 {
 					record.Write(body)
 				} else {
 					record.Ignore()
 				}
 				pipeline.Pipe(record)
+				lastScanned = record
 			}
 		}
 

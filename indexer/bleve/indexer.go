@@ -1,6 +1,7 @@
 package bleve
 
 import (
+	"log"
 	"strconv"
 	"time"
 
@@ -20,6 +21,7 @@ type indexRecord struct {
 	Title    string
 	Body     string
 	Modified string
+	Indexed  string
 }
 
 // Record method get existent or creates a new Record to be saved/updated in the indexer
@@ -31,7 +33,6 @@ func (i *bleveIndexer) Record(path string) indexer.Record {
 		document: nil,
 		body:     []byte{},
 		loaded:   false,
-		modified: time.Now(),
 	}
 	return record
 }
@@ -75,11 +76,15 @@ func (i *bleveIndexer) index(in interface{}) interface{} {
 	}
 
 	if rec != nil && len(rec.body) > 0 {
+		log.Println(rec.Path())
+		rec.SetIndexed(time.Now())
+
 		r := indexRecord{
 			Path:     rec.Path(),
 			Title:    rec.Title(),
 			Body:     string(rec.body),
-			Modified: strconv.Itoa(int(time.Now().Unix())),
+			Modified: strconv.Itoa(int(rec.Modified().Unix())),
+			Indexed:  strconv.Itoa(int(rec.Indexed().Unix())),
 		}
 
 		i.bleve.Index(rec.Path(), r)

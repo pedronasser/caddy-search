@@ -3,6 +3,7 @@ package search
 import (
 	"bytes"
 	"io"
+	"log"
 	"time"
 
 	"github.com/pedronasser/caddy-search/indexer"
@@ -66,6 +67,7 @@ func (p *Pipeline) validate(in interface{}) interface{} {
 		}
 
 		if p.ValidatePath(record.Path()) {
+			log.Println(record.Path())
 			return in
 		}
 		return nil
@@ -121,6 +123,7 @@ func (p *Pipeline) parse(in interface{}) interface{} {
 			return record
 		} else {
 			// only accept html files
+			record.Ignore()
 			return err
 		}
 	}

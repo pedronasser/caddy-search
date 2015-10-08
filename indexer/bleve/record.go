@@ -17,37 +17,56 @@ type Record struct {
 	modified time.Time
 	mutex    sync.RWMutex
 	ignored  bool
+	indexed  time.Time
 }
 
 // Path returns Record's path
 func (r *Record) Path() string {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
 	return r.path
 }
 
 // Title returns Record's title
 func (r *Record) Title() string {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
 	return r.title
 }
 
 // SetTitle replaces Record's title
 func (r *Record) SetTitle(title string) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	r.title = title
 }
 
 // Modified returns Record's Modified
 func (r *Record) Modified() time.Time {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
 	return r.modified
+}
+
+// SetModified defines new modification time for this record
+func (r *Record) SetModified(mod time.Time) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.modified = mod
 }
 
 // Body returns Record's body
 func (r *Record) Body() []byte {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
 	return r.body
 }
 
 // SetBody replaces Record's body
 func (r *Record) SetBody(body []byte) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
 	r.body = body
 }
 
@@ -58,6 +77,9 @@ func (r *Record) Load() bool {
 		r.loaded = true
 		return false
 	}
+
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	result := make(map[string]interface{})
 
@@ -71,6 +93,12 @@ func (r *Record) Load() bool {
 	modified, err := strconv.Atoi(strModified)
 
 	r.modified = time.Unix(int64(modified), 0)
+
+	strIndexed := string(result["Indexed"].([]byte))
+	indexed, err := strconv.Atoi(strIndexed)
+
+	r.indexed = time.Unix(int64(indexed), 0)
+
 	r.document = result
 
 	if len(r.body) == 0 {
@@ -108,4 +136,20 @@ func (r *Record) Ignored() bool {
 	defer r.mutex.RUnlock()
 
 	return r.ignored
+}
+
+// Indexed returns the indexing time (if indexed)
+func (r *Record) Indexed() time.Time {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	return r.indexed
+}
+
+// SetIndexed define the time that this record has been indexed
+func (r *Record) SetIndexed(index time.Time) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	r.indexed = index
 }
