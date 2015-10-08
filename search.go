@@ -28,12 +28,22 @@ func (s *Search) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) 
 	}
 
 	record := s.Indexer.Record(r.URL.String())
-	go s.Pipeline.Pipe(record)
 
 	status, err := s.Next.ServeHTTP(&searchResponseWriter{w, record}, r)
+
+	modif := w.Header().Get("Last-Modified")
+	if len(modif) > 0 {
+		modTime, err := time.Parse(`Mon, 2 Jan 2006 15:04:05 MST`, modif)
+		if err == nil {
+			record.SetModified(modTime)
+		}
+	}
+
 	if status != http.StatusOK {
 		record.Ignore()
 	}
+
+	go s.Pipeline.Pipe(record)
 
 	return status, err
 }
@@ -44,6 +54,7 @@ type Result struct {
 	Title    string
 	Body     string
 	Modified time.Time
+	Indexed  time.Time
 }
 
 // SearchJSON renders the search results in JSON format
@@ -59,6 +70,7 @@ func (s *Search) SearchJSON(w http.ResponseWriter, r *http.Request) (int, error)
 			Path:     result.Path(),
 			Title:    result.Title(),
 			Modified: result.Modified(),
+			Indexed:  result.Indexed(),
 			Body:     string(body),
 		}
 	}
