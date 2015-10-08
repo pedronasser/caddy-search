@@ -18,9 +18,10 @@ For more options, use the following syntax:
 ```
 search {
     engine      (default: bleve)
-    datadir     (default: index)
+    datadir     (default: /tmp/caddyIndex)
     endpoint    (default: /search)
     template    (default: nil)
+    expire      (default: 60)
 
     +path       regexp
     -path       regexp
@@ -29,6 +30,7 @@ search {
 * **engine** is the engine for indexing and searching
 * **datadir** is the absolute path to where the indexer should store all data
 * **template** is the path to the search's HTML result's template
+* **expire** is the duration (in seconds) until a indexed document validation expires (should be updated)
 * **+path** include a path to be indexed (can be added multiple times)
 * **-path** exclude a path from being index (can be added multiple times)
 
