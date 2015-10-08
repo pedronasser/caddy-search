@@ -1,4 +1,6 @@
 0.0.0.0
 
 browse
-search
+search {
+    expire 10
+}

@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"text/template"
+	"time"
 
 	"github.com/mholt/caddy/config/setup"
 	"github.com/mholt/caddy/middleware"
@@ -41,6 +43,19 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 		return ScanToPipe(c.Root, ppl, index)
 	})
 
+	expire := time.NewTicker(config.Expire)
+
+	go func() {
+		for {
+			select {
+			case <-expire.C:
+				if !lastScanned.Indexed().IsZero() || lastScanned.Ignored() {
+					ScanToPipe(c.Root, ppl, index)
+				}
+			}
+		}
+	}()
+
 	mid = func(next middleware.Handler) middleware.Handler {
 		return &Search{
 			Next:     next,
@@ -52,6 +67,8 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 
 	return
 }
+
+var lastScanned indexer.Record
 
 // ScanToPipe ...
 func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) error {
@@ -81,12 +98,14 @@ func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) error {
 				}
 
 				record := index.Record(reqPath)
+				record.SetModified(info.ModTime())
 				if len(body) > 0 {
 					record.Write(body)
 				} else {
 					record.Ignore()
 				}
 				pipeline.Pipe(record)
+				lastScanned = record
 			}
 		}
 
@@ -119,6 +138,7 @@ type Config struct {
 	Endpoint       string
 	IndexDirectory string
 	Template       *template.Template
+	Expire         time.Duration
 	SiteRoot       string
 }
 
@@ -132,6 +152,7 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 		ExcludePaths:   []*regexp.Regexp{},
 		Endpoint:       `/search`,
 		SiteRoot:       c.Root,
+		Expire:         60 * time.Second,
 		Template:       nil,
 	}
 
@@ -141,8 +162,12 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 	for c.Next() {
 		args := c.RemainingArgs()
 
-		if len(args) == 1 {
-			incPaths = append(incPaths, c.Val())
+		switch len(args) {
+		case 2:
+			conf.Endpoint = args[1]
+			fallthrough
+		case 1:
+			incPaths = append(incPaths, args[0])
 		}
 
 		for c.NextBlock() {
@@ -169,6 +194,15 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 					return nil, c.ArgErr()
 				}
 				conf.Endpoint = c.Val()
+			case "expire":
+				if !c.NextArg() {
+					return nil, c.ArgErr()
+				}
+				exp, err := strconv.Atoi(c.Val())
+				if err != nil {
+					return nil, err
+				}
+				conf.Expire = time.Duration(exp) * time.Second
 			case "datadir":
 				if !c.NextArg() {
 					return nil, c.ArgErr()

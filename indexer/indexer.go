@@ -26,8 +26,10 @@ type Record interface {
 	SetTitle(string)
 	Body() []byte
 	SetBody([]byte)
+	SetModified(time.Time)
 	Modified() time.Time
 	Load() bool
 	Ignore()
 	Ignored() bool
+	Indexed() time.Time
 }

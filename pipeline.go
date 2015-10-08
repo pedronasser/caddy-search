@@ -129,6 +129,8 @@ func (p *Pipeline) parse(in interface{}) interface{} {
 			record.SetBody(record.Body())
 			return record
 		} else {
+			// only accept html files
+			record.Ignore()
 			return err
 		}
 	}
