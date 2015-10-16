@@ -17,52 +17,57 @@ import (
 
 // Setup creates a new middleware with the given configuration
 func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
-	var config *Config
+	s := &Search{}
 
-	config, err = parseSearch(c)
-	if err != nil {
-		return nil, err
-	}
+	c.OncePerServerBlock(func() error {
+		var config *Config
 
-	index, err := NewIndexer(config.Engine, indexer.Config{
-		HostName:       config.HostName,
-		IndexDirectory: config.IndexDirectory,
-	})
+		config, err = parseSearch(c)
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return nil, err
-	}
+		index, err := NewIndexer(config.Engine, indexer.Config{
+			HostName:       config.HostName,
+			IndexDirectory: config.IndexDirectory,
+		})
 
-	ppl, err := NewPipeline(config, index)
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return nil, err
-	}
+		ppl, err := NewPipeline(config, index)
 
-	c.Startup = append(c.Startup, func() error {
-		return ScanToPipe(c.Root, ppl, index)
-	})
+		if err != nil {
+			return err
+		}
 
-	expire := time.NewTicker(config.Expire)
+		c.Startup = append(c.Startup, func() error {
+			return ScanToPipe(c.Root, ppl, index)
+		})
 
-	go func() {
-		for {
-			select {
-			case <-expire.C:
-				if !lastScanned.Indexed().IsZero() || lastScanned.Ignored() {
-					ScanToPipe(c.Root, ppl, index)
+		expire := time.NewTicker(config.Expire)
+
+		go func() {
+			for {
+				select {
+				case <-expire.C:
+					if !lastScanned.Indexed().IsZero() || lastScanned.Ignored() {
+						ScanToPipe(c.Root, ppl, index)
+					}
 				}
 			}
-		}
-	}()
+		}()
+
+		s.Config = config
+		s.Indexer = index
+		s.Pipeline = ppl
+
+		return nil
+	})
 
 	mid = func(next middleware.Handler) middleware.Handler {
-		return &Search{
-			Next:     next,
-			Config:   config,
-			Indexer:  index,
-			Pipeline: ppl,
-		}
+		return s
 	}
 
 	return
