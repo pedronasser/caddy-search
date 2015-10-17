@@ -15,68 +15,77 @@ import (
 	"github.com/pedronasser/caddy-search/indexer/bleve"
 )
 
+var LastIndexer indexer.Handler
+var LastPipeline *Pipeline
+
 // Setup creates a new middleware with the given configuration
 func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
-	s := &Search{}
+	var config *Config
 
-	c.OncePerServerBlock(func() error {
-		var config *Config
+	config, err = parseSearch(c)
+	if err != nil {
+		return nil, err
+	}
 
-		config, err = parseSearch(c)
-		if err != nil {
-			return err
-		}
-
-		index, err := NewIndexer(config.Engine, indexer.Config{
+	var index indexer.Handler
+	var ppl *Pipeline
+	if c.ServerBlockHosts[0] == c.Address() {
+		index, err = NewIndexer(config.Engine, indexer.Config{
 			HostName:       config.HostName,
 			IndexDirectory: config.IndexDirectory,
 		})
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		ppl, err := NewPipeline(config, index)
+		ppl, err = NewPipeline(config, index)
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		c.Startup = append(c.Startup, func() error {
-			return ScanToPipe(c.Root, ppl, index)
-		})
+		LastIndexer = index
+		LastPipeline = ppl
+	} else {
+		index = LastIndexer
+		ppl = LastPipeline
+	}
 
+	err = c.OncePerServerBlock(func() error {
 		expire := time.NewTicker(config.Expire)
-
 		go func() {
+			var lastScanned indexer.Record
+			lastScanned = ScanToPipe(c.Root, ppl, index)
+
 			for {
 				select {
 				case <-expire.C:
-					if !lastScanned.Indexed().IsZero() || lastScanned.Ignored() {
-						ScanToPipe(c.Root, ppl, index)
+					if lastScanned != nil && (!lastScanned.Indexed().IsZero() || lastScanned.Ignored()) {
+						lastScanned = ScanToPipe(c.Root, ppl, index)
 					}
 				}
 			}
 		}()
 
-		s.Config = config
-		s.Indexer = index
-		s.Pipeline = ppl
-
 		return nil
 	})
 
 	mid = func(next middleware.Handler) middleware.Handler {
-		return s
+		return &Search{
+			Next:     next,
+			Config:   config,
+			Indexer:  index,
+			Pipeline: ppl,
+		}
 	}
 
 	return
 }
 
-var lastScanned indexer.Record
-
 // ScanToPipe ...
-func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) error {
+func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) indexer.Record {
+	var last indexer.Record
 	filepath.Walk(fp, func(path string, info os.FileInfo, err error) error {
 		if info.Name() == "." {
 			return nil
@@ -110,14 +119,14 @@ func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) error {
 					record.Ignore()
 				}
 				pipeline.Pipe(record)
-				lastScanned = record
+				last = record
 			}
 		}
 
 		return nil
 	})
 
-	return nil
+	return last
 }
 
 // NewIndexer creates a new Indexer with the received config
@@ -150,7 +159,7 @@ type Config struct {
 // parseSearch controller information to create a IndexSearch config
 func parseSearch(c *setup.Controller) (*Config, error) {
 	conf := &Config{
-		HostName:       c.Address(),
+		HostName:       c.ServerBlockHosts[0],
 		Engine:         `bleve`,
 		IndexDirectory: `/tmp/caddyIndex`,
 		IncludePaths:   []*regexp.Regexp{},
