@@ -15,8 +15,7 @@ import (
 	"github.com/pedronasser/caddy-search/indexer/bleve"
 )
 
-var LastIndexer indexer.Handler
-var LastPipeline *Pipeline
+var lastSearch *Search
 
 // Setup creates a new middleware with the given configuration
 func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
@@ -27,10 +26,8 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 		return nil, err
 	}
 
-	var index indexer.Handler
-	var ppl *Pipeline
 	if c.ServerBlockHosts[0] == c.Address() {
-		index, err = NewIndexer(config.Engine, indexer.Config{
+		index, err := NewIndexer(config.Engine, indexer.Config{
 			HostName:       config.HostName,
 			IndexDirectory: config.IndexDirectory,
 		})
@@ -39,20 +36,12 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 			return nil, err
 		}
 
-		ppl, err = NewPipeline(config, index)
+		ppl, err := NewPipeline(config, index)
 
 		if err != nil {
 			return nil, err
 		}
 
-		LastIndexer = index
-		LastPipeline = ppl
-	} else {
-		index = LastIndexer
-		ppl = LastPipeline
-	}
-
-	err = c.OncePerServerBlock(func() error {
 		expire := time.NewTicker(config.Expire)
 		go func() {
 			var lastScanned indexer.Record
@@ -68,16 +57,16 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 			}
 		}()
 
-		return nil
-	})
-
-	mid = func(next middleware.Handler) middleware.Handler {
-		return &Search{
-			Next:     next,
+		lastSearch = &Search{
 			Config:   config,
 			Indexer:  index,
 			Pipeline: ppl,
 		}
+	}
+
+	mid = func(next middleware.Handler) middleware.Handler {
+		lastSearch.Next = next
+		return lastSearch
 	}
 
 	return
