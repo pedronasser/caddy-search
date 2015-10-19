@@ -1,6 +1,7 @@
 package search
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -15,8 +16,6 @@ import (
 	"github.com/pedronasser/caddy-search/indexer/bleve"
 )
 
-var lastSearch *Search
-
 // Setup creates a new middleware with the given configuration
 func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 	var config *Config
@@ -26,7 +25,7 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 		return nil, err
 	}
 
-	if c.ServerBlockHosts[0] == c.Address() {
+	if c.ServerBlockHostIndex == 0 {
 		index, err := NewIndexer(config.Engine, indexer.Config{
 			HostName:       config.HostName,
 			IndexDirectory: config.IndexDirectory,
@@ -57,16 +56,20 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 			}
 		}()
 
-		lastSearch = &Search{
+		c.ServerBlockStorage = &Search{
 			Config:   config,
 			Indexer:  index,
 			Pipeline: ppl,
 		}
 	}
 
-	mid = func(next middleware.Handler) middleware.Handler {
-		lastSearch.Next = next
-		return lastSearch
+	if s, ok := c.ServerBlockStorage.(*Search); ok {
+		mid = func(next middleware.Handler) middleware.Handler {
+			s.Next = next
+			return s
+		}
+	} else {
+		return nil, errors.New("Could not create the search middleware")
 	}
 
 	return
