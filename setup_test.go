@@ -79,13 +79,16 @@ var (
 		{
 			`search {
 				expire 1000
+				crawl
 			}`,
 			Config{
 				Expire: 1000 * time.Second,
+				Crawl:  true,
 			},
 			"Should `search` support multiple include and excludes",
 			func(expected, result Config) {
 				So(expected.Expire, ShouldEqual, result.Expire)
+				So(expected.Crawl, ShouldEqual, result.Crawl)
 			},
 		},
 	}

@@ -3,20 +3,23 @@ package search
 import (
 	"bytes"
 	"io"
+	"log"
+	"net/http"
 	"path"
 	"strings"
 	"time"
 
+	"github.com/coocood/freecache"
 	"github.com/pedronasser/caddy-search/indexer"
 	"github.com/pedronasser/go-piper"
 	"golang.org/x/net/html"
 )
 
 // NewPipeline creates a new Pipeline instance
-func NewPipeline(config *Config, indexer indexer.Handler) (*Pipeline, error) {
+func NewPipeline(config *Config, index indexer.Handler) (*Pipeline, error) {
 	ppl := &Pipeline{
 		config:  config,
-		indexer: indexer,
+		indexer: index,
 	}
 
 	pipe, err := piper.New(
@@ -30,6 +33,7 @@ func NewPipeline(config *Config, indexer indexer.Handler) (*Pipeline, error) {
 	}
 
 	ppl.pipe = pipe
+	ppl.cache = freecache.NewCache(512 * 1024 * 1024)
 
 	go func() {
 		tick := time.NewTicker(1 * time.Second)
@@ -50,6 +54,7 @@ type Pipeline struct {
 	config  *Config
 	indexer indexer.Handler
 	pipe    piper.Handler
+	cache   *freecache.Cache
 }
 
 // Pipe is the step of the pipeline that pipes valid documents to the indexer.
@@ -67,7 +72,12 @@ func (p *Pipeline) validate(in interface{}) interface{} {
 			return nil
 		}
 
-		if p.ValidatePath(record.Path()) {
+		key := []byte(record.Path())
+		exist, _ := p.cache.Get(key)
+
+		if p.ValidatePath(record.Path()) && exist == nil {
+			log.Println(record.Path())
+			p.cache.Set(key, []byte{}, int(p.config.Expire.Seconds()))
 			return in
 		}
 		return nil
@@ -115,12 +125,26 @@ func stripHTML(s []byte) []byte {
 // important information
 func (p *Pipeline) parse(in interface{}) interface{} {
 	if record, ok := in.(indexer.Record); ok {
+		// log.Println(record.Path())
 		body := bytes.NewReader(record.Body())
 		title, err := getHTMLContent(body, titleTag)
 		if err == nil {
+			links, _ := getLinks(body)
+
 			// html file
 			record.SetTitle(title)
 			record.SetBody(stripHTML(record.Body()))
+
+			if p.config.Crawl {
+				for _, link := range links {
+					if string(link["href"][0]) == "/" {
+						go func(url string) {
+							http.Get("http://" + p.config.HostName + url)
+						}(link["href"])
+					}
+				}
+			}
+
 			return record
 		} else if strings.HasSuffix(record.Path(), ".txt") || strings.HasSuffix(record.Path(), ".md") {
 			// TODO: We can improve file type detection; this is a very limited subset of indexable file types
@@ -162,6 +186,28 @@ func getHTMLContent(r io.Reader, tag []byte) (result string, err error) {
 				} else {
 					valid = 0
 				}
+			}
+		}
+	}
+}
+
+func getLinks(r io.Reader) (result []map[string]string, err error) {
+	z := html.NewTokenizer(r)
+
+	for {
+		tt := z.Next()
+		switch tt {
+		case html.ErrorToken:
+			err = z.Err()
+			return
+		case html.StartTagToken:
+			t := z.Token()
+			if t.Data == "a" {
+				link := make(map[string]string)
+				for _, a := range t.Attr {
+					link[string(a.Key)] = a.Val
+				}
+				result = append(result, link)
 			}
 		}
 	}

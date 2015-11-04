@@ -2,7 +2,7 @@ package search
 
 import (
 	"errors"
-	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,7 +10,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/mholt/caddy/config/setup"
+	"github.com/mholt/caddy/caddy/setup"
 	"github.com/mholt/caddy/middleware"
 	"github.com/pedronasser/caddy-search/indexer"
 	"github.com/pedronasser/caddy-search/indexer/bleve"
@@ -98,20 +98,9 @@ func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) indexer.Re
 			reqPath = "/" + reqPath
 
 			if pipeline.ValidatePath(reqPath) {
-				body, err := ioutil.ReadFile(path)
-				if err != nil {
-					return err
-				}
-
-				record := index.Record(reqPath)
-				record.SetModified(info.ModTime())
-				if len(body) > 0 {
-					record.Write(body)
-				} else {
-					record.Ignore()
-				}
-				pipeline.Pipe(record)
-				last = record
+				go func(url string) {
+					http.Get("http://" + pipeline.config.HostName + url)
+				}(reqPath)
 			}
 		}
 
@@ -146,6 +135,7 @@ type Config struct {
 	Template       *template.Template
 	Expire         time.Duration
 	SiteRoot       string
+	Crawl          bool
 }
 
 // parseSearch controller information to create a IndexSearch config
@@ -160,6 +150,11 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 		SiteRoot:       c.Root,
 		Expire:         60 * time.Second,
 		Template:       nil,
+		Crawl:          false,
+	}
+
+	if conf.HostName != "" && string(conf.HostName[len(conf.HostName)-1]) == ":" {
+		conf.HostName = conf.HostName + "2015"
 	}
 
 	incPaths := []string{}
@@ -222,6 +217,8 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 						return nil, err
 					}
 				}
+			case "crawl":
+				conf.Crawl = true
 			}
 		}
 	}
