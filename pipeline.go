@@ -3,8 +3,8 @@ package search
 import (
 	"bytes"
 	"io"
-	"log"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -76,7 +76,6 @@ func (p *Pipeline) validate(in interface{}) interface{} {
 		exist, _ := p.cache.Get(key)
 
 		if p.ValidatePath(record.Path()) && exist == nil {
-			log.Println(record.Path())
 			p.cache.Set(key, []byte{}, int(p.config.Expire.Seconds()))
 			return in
 		}
@@ -125,22 +124,33 @@ func stripHTML(s []byte) []byte {
 // important information
 func (p *Pipeline) parse(in interface{}) interface{} {
 	if record, ok := in.(indexer.Record); ok {
-		// log.Println(record.Path())
 		body := bytes.NewReader(record.Body())
 		title, err := getHTMLContent(body, titleTag)
-		if err == nil {
+		if title != "" {
 			links, _ := getLinks(body)
 
 			// html file
 			record.SetTitle(title)
 			record.SetBody(stripHTML(record.Body()))
 
-			if p.config.Crawl {
+			if p.config.Crawl != "" {
 				for _, link := range links {
-					if string(link["href"][0]) == "/" {
-						go func(url string) {
-							http.Get("http://" + p.config.HostName + url)
-						}(link["href"])
+					plink, err := url.Parse(link["href"])
+					if err != nil {
+						continue
+					}
+					if plink.Host == p.config.HostName || plink.Host == "" {
+						if !strings.HasPrefix(plink.Path, record.Path()) {
+							plink.Path = record.Path() + plink.Path
+						}
+
+						go func(u string) {
+							resp, err := http.Get("http://" + p.config.HostName + u)
+							if err != nil {
+								return
+							}
+							defer resp.Body.Close()
+						}(plink.Path)
 					}
 				}
 			}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -41,20 +42,18 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 			return nil, err
 		}
 
-		expire := time.NewTicker(config.Expire)
-		go func() {
-			var lastScanned indexer.Record
-			lastScanned = ScanToPipe(c.Root, ppl, index)
-
-			for {
-				select {
-				case <-expire.C:
-					if lastScanned != nil && (!lastScanned.Indexed().IsZero() || lastScanned.Ignored()) {
-						lastScanned = ScanToPipe(c.Root, ppl, index)
-					}
+		c.Startup = append(c.Startup, func() error {
+			go func(url string) {
+				time.Sleep(1 * time.Second) // Wait for port listening
+				resp, err := http.Get("http://" + config.HostName + url)
+				if err != nil {
+					return
 				}
-			}
-		}()
+				defer resp.Body.Close()
+			}(config.Crawl)
+
+			return nil
+		})
 
 		c.ServerBlockStorage = &Search{
 			Config:   config,
@@ -73,41 +72,6 @@ func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
 	}
 
 	return
-}
-
-// ScanToPipe ...
-func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) indexer.Record {
-	var last indexer.Record
-	filepath.Walk(fp, func(path string, info os.FileInfo, err error) error {
-		if info.Name() == "." {
-			return nil
-		}
-
-		if info.Name() == "" || info.Name()[0] == '.' {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if !info.IsDir() {
-			reqPath, err := filepath.Rel(fp, path)
-			if err != nil {
-				return err
-			}
-			reqPath = "/" + reqPath
-
-			if pipeline.ValidatePath(reqPath) {
-				go func(url string) {
-					http.Get("http://" + pipeline.config.HostName + url)
-				}(reqPath)
-			}
-		}
-
-		return nil
-	})
-
-	return last
 }
 
 // NewIndexer creates a new Indexer with the received config
@@ -135,13 +99,13 @@ type Config struct {
 	Template       *template.Template
 	Expire         time.Duration
 	SiteRoot       string
-	Crawl          bool
+	Crawl          string
 }
 
 // parseSearch controller information to create a IndexSearch config
 func parseSearch(c *setup.Controller) (*Config, error) {
 	conf := &Config{
-		HostName:       c.ServerBlockHosts[0],
+		HostName:       strings.Replace(c.ServerBlockHosts[0], "0.0.0.0", "127.0.0.1", 1),
 		Engine:         `bleve`,
 		IndexDirectory: `/tmp/caddyIndex`,
 		IncludePaths:   []*regexp.Regexp{},
@@ -150,7 +114,7 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 		SiteRoot:       c.Root,
 		Expire:         60 * time.Second,
 		Template:       nil,
-		Crawl:          false,
+		Crawl:          "/",
 	}
 
 	if conf.HostName != "" && string(conf.HostName[len(conf.HostName)-1]) == ":" {
@@ -218,7 +182,10 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 					}
 				}
 			case "crawl":
-				conf.Crawl = true
+				if !c.NextArg() {
+					return nil, c.ArgErr()
+				}
+				conf.Crawl = c.Val()
 			}
 		}
 	}
