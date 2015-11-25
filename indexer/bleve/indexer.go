@@ -32,6 +32,7 @@ func (i *bleveIndexer) Record(path string) indexer.Record {
 		document: nil,
 		body:     []byte{},
 		loaded:   false,
+		indexed:  time.Time{},
 	}
 	return record
 }
