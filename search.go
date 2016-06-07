@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mholt/caddy/middleware"
+	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"github.com/pedronasser/caddy-search/indexer"
 )
 
 // Search represents this middleware structure
 type Search struct {
-	Next middleware.Handler
+	Next httpserver.Handler
 	*Config
 	Indexer indexer.Handler
 	*Pipeline
@@ -20,7 +20,7 @@ type Search struct {
 
 // ServerHTTP is the HTTP handler for this middleware
 func (s *Search) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
-	if middleware.Path(r.URL.Path).Matches(s.Config.Endpoint) {
+	if httpserver.Path(r.URL.Path).Matches(s.Config.Endpoint) {
 		if r.Header.Get("Accept") == "application/json" || s.Config.Template == nil {
 			return s.SearchJSON(w, r)
 		}
@@ -101,7 +101,7 @@ func (s *Search) SearchHTML(w http.ResponseWriter, r *http.Request) (int, error)
 	}
 
 	qresults := QueryResults{
-		Context: middleware.Context{
+		Context: httpserver.Context{
 			Root: http.Dir(s.SiteRoot),
 			Req:  r,
 			URL:  r.URL,
@@ -122,7 +122,7 @@ func (s *Search) SearchHTML(w http.ResponseWriter, r *http.Request) (int, error)
 }
 
 type QueryResults struct {
-	middleware.Context
+	httpserver.Context
 	Query   string
 	Results []Result
 }

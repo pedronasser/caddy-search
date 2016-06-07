@@ -1,76 +1,79 @@
 package search
 
 import (
-	"errors"
+	"crypto/md5"
+	"encoding/hex"
+	"html/template"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"text/template"
 	"time"
 
-	"github.com/mholt/caddy/caddy/setup"
-	"github.com/mholt/caddy/middleware"
+	"github.com/mholt/caddy"
+	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"github.com/pedronasser/caddy-search/indexer"
 	"github.com/pedronasser/caddy-search/indexer/bleve"
 )
 
+func init() {
+	caddy.RegisterPlugin("search", caddy.Plugin{
+		ServerType: "http",
+		Action:     Setup,
+	})
+}
+
 // Setup creates a new middleware with the given configuration
-func Setup(c *setup.Controller) (mid middleware.Middleware, err error) {
+func Setup(c *caddy.Controller) (err error) {
+	cfg := httpserver.GetConfig(c.Key)
 	var config *Config
 
-	config, err = parseSearch(c)
+	config, err = ParseSearchConfig(c, cfg)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if c.ServerBlockHostIndex == 0 {
-		index, err := NewIndexer(config.Engine, indexer.Config{
-			HostName:       config.HostName,
-			IndexDirectory: config.IndexDirectory,
-		})
+	index, err := NewIndexer(config.Engine, indexer.Config{
+		HostName:       config.HostName,
+		IndexDirectory: config.IndexDirectory,
+	})
 
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return err
+	}
 
-		ppl, err := NewPipeline(config, index)
+	ppl, err := NewPipeline(config, index)
 
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return err
+	}
 
-		expire := time.NewTicker(config.Expire)
-		go func() {
-			var lastScanned indexer.Record
-			lastScanned = ScanToPipe(c.Root, ppl, index)
+	expire := time.NewTicker(config.Expire)
+	go func() {
+		var lastScanned indexer.Record
+		lastScanned = ScanToPipe(cfg.Root, ppl, index)
 
-			for {
-				select {
-				case <-expire.C:
-					if lastScanned != nil && (!lastScanned.Indexed().IsZero() || lastScanned.Ignored()) {
-						lastScanned = ScanToPipe(c.Root, ppl, index)
-					}
+		for {
+			select {
+			case <-expire.C:
+				if lastScanned != nil && (!lastScanned.Indexed().IsZero() || lastScanned.Ignored()) {
+					lastScanned = ScanToPipe(cfg.Root, ppl, index)
 				}
 			}
-		}()
-
-		c.ServerBlockStorage = &Search{
-			Config:   config,
-			Indexer:  index,
-			Pipeline: ppl,
 		}
+	}()
+
+	search := &Search{
+		Config:   config,
+		Indexer:  index,
+		Pipeline: ppl,
 	}
 
-	if s, ok := c.ServerBlockStorage.(*Search); ok {
-		mid = func(next middleware.Handler) middleware.Handler {
-			s.Next = next
-			return s
-		}
-	} else {
-		return nil, errors.New("Could not create the search middleware")
-	}
+	cfg.AddMiddleware(func(next httpserver.Handler) httpserver.Handler {
+		search.Next = next
+		return search
+	})
 
 	return
 }
@@ -148,18 +151,26 @@ type Config struct {
 	SiteRoot       string
 }
 
-// parseSearch controller information to create a IndexSearch config
-func parseSearch(c *setup.Controller) (*Config, error) {
+// ParseSearchConfig controller information to create a IndexSearch config
+func ParseSearchConfig(c *caddy.Controller, cnf *httpserver.SiteConfig) (*Config, error) {
+	hosthash := md5.New()
+	hosthash.Write([]byte(cnf.Host()))
+
 	conf := &Config{
-		HostName:       c.ServerBlockHosts[0],
+		HostName:       hex.EncodeToString(hosthash.Sum(nil)),
 		Engine:         `bleve`,
 		IndexDirectory: `/tmp/caddyIndex`,
 		IncludePaths:   []*regexp.Regexp{},
 		ExcludePaths:   []*regexp.Regexp{},
 		Endpoint:       `/search`,
-		SiteRoot:       c.Root,
+		SiteRoot:       cnf.Root,
 		Expire:         60 * time.Second,
 		Template:       nil,
+	}
+
+	_, err := os.Stat(conf.SiteRoot)
+	if err != nil {
+		return nil, c.Err("[search]: `invalid root directory`")
 	}
 
 	incPaths := []string{}
@@ -230,13 +241,13 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 		incPaths = append(incPaths, "^/")
 	}
 
-	conf.IncludePaths = convertToRegExp(incPaths)
-	conf.ExcludePaths = convertToRegExp(excPaths)
+	conf.IncludePaths = ConvertToRegExp(incPaths)
+	conf.ExcludePaths = ConvertToRegExp(excPaths)
 
 	dir := conf.IndexDirectory
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-			return nil, c.Err("Given 'datadir' not a valid path.")
+			return nil, c.Err("[search] Given 'datadir' not a valid path.")
 		}
 	}
 
@@ -251,7 +262,8 @@ func parseSearch(c *setup.Controller) (*Config, error) {
 	return conf, nil
 }
 
-func convertToRegExp(rexp []string) (r []*regexp.Regexp) {
+// ConvertToRegExp compile a string regular expression to multiple *regexp.Regexp instances
+func ConvertToRegExp(rexp []string) (r []*regexp.Regexp) {
 	r = make([]*regexp.Regexp, 0)
 	for _, exp := range rexp {
 		var rule *regexp.Regexp

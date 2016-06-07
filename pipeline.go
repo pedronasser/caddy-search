@@ -57,6 +57,11 @@ func (p *Pipeline) Pipe(record indexer.Record) {
 	p.pipe.Input() <- record
 }
 
+// Piper is a func that returns the piper.Handler
+func (p *Pipeline) Piper() piper.Handler {
+	return p.pipe
+}
+
 // validate is the step of the pipeline that checks if documents are valid for
 // being indexed
 func (p *Pipeline) validate(in interface{}) interface{} {

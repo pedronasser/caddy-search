@@ -1,49 +1,51 @@
-package search
+package search_test
 
 import (
 	"testing"
 	"time"
 
-	"github.com/mholt/caddy/config/setup"
+	"github.com/mholt/caddy"
+	"github.com/mholt/caddy/caddyhttp/httpserver"
+	"github.com/pedronasser/caddy-search"
 	. "github.com/smartystreets/goconvey/convey"
 )
 
 var (
-	defaultPath = convertToRegExp([]string{"^/"})
+	defaultPath = search.ConvertToRegExp([]string{"^/"})
 	configCases = []struct {
 		config      string
-		expectConf  Config
+		expectConf  search.Config
 		expectMsg   string
-		expectMatch func(Config, Config)
+		expectMatch func(search.Config, search.Config)
 	}{
 		{
 			`search`,
-			Config{
+			search.Config{
 				Endpoint:     "/search",
 				IncludePaths: defaultPath,
 			},
 			"Should support `search` without any arguments",
-			func(expected, result Config) {
+			func(expected, result search.Config) {
 				So(expected.Endpoint, ShouldEqual, result.Endpoint)
 			},
 		},
 		{
 			`search /path`,
-			Config{
-				IncludePaths: convertToRegExp([]string{"/path"}),
+			search.Config{
+				IncludePaths: search.ConvertToRegExp([]string{"/path"}),
 			},
 			"Should support `search` with only one argument",
-			func(expected, result Config) {
+			func(expected, result search.Config) {
 				So(expected.IncludePaths[0].String(), ShouldEqual, result.IncludePaths[0].String())
 			},
 		},
 		{
 			`search / /path`,
-			Config{
+			search.Config{
 				Endpoint: "/path",
 			},
 			"Should support `search` with two arguments",
-			func(expected, result Config) {
+			func(expected, result search.Config) {
 				So(expected.Endpoint, ShouldEqual, result.Endpoint)
 			},
 		},
@@ -51,11 +53,11 @@ var (
 			`search / /search {
 				endpoint /search2
 			}`,
-			Config{
+			search.Config{
 				Endpoint: "/search2",
 			},
 			"Should support `search` arguments and override configurations",
-			func(expected, result Config) {
+			func(expected, result search.Config) {
 				So(expected.Endpoint, ShouldEqual, result.Endpoint)
 			},
 		},
@@ -65,12 +67,12 @@ var (
 				+path /otherPath
 				-path /forbidden
 			}`,
-			Config{
-				IncludePaths: convertToRegExp([]string{"/path", "/otherPath"}),
-				ExcludePaths: convertToRegExp([]string{"/forbidden"}),
+			search.Config{
+				IncludePaths: search.ConvertToRegExp([]string{"/path", "/otherPath"}),
+				ExcludePaths: search.ConvertToRegExp([]string{"/forbidden"}),
 			},
 			"Should `search` support multiple include and excludes",
-			func(expected, result Config) {
+			func(expected, result search.Config) {
 				So(expected.IncludePaths[0].String(), ShouldEqual, result.IncludePaths[0].String())
 				So(expected.IncludePaths[1].String(), ShouldEqual, result.IncludePaths[1].String())
 				So(expected.ExcludePaths[0].String(), ShouldEqual, result.ExcludePaths[0].String())
@@ -80,11 +82,11 @@ var (
 			`search {
 				expire 1000
 			}`,
-			Config{
+			search.Config{
 				Expire: 1000 * time.Second,
 			},
 			"Should `search` support multiple include and excludes",
-			func(expected, result Config) {
+			func(expected, result search.Config) {
 				So(expected.Expire, ShouldEqual, result.Expire)
 			},
 		},
@@ -94,8 +96,9 @@ var (
 func TestSearchSetup(t *testing.T) {
 	for _, kase := range configCases {
 		Convey("Given a Caddy controller with the search middleware", t, func() {
-			c := setup.NewTestController(kase.config)
-			result, err := parseSearch(c)
+			c := caddy.NewTestController(kase.config)
+			cnf := httpserver.GetConfig("")
+			result, err := search.ParseSearchConfig(c, cnf)
 			Convey("Should not receive an error when parsing", func() {
 				So(err, ShouldBeNil)
 			})
