@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"html/template"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -52,13 +51,13 @@ func Setup(c *caddy.Controller) (err error) {
 	expire := time.NewTicker(config.Expire)
 	go func() {
 		var lastScanned indexer.Record
-		lastScanned = ScanToPipe(cfg.Root, ppl, index)
+		lastScanned = ScanToPipe(config.SiteRoot, ppl, index)
 
 		for {
 			select {
 			case <-expire.C:
 				if lastScanned != nil && (!lastScanned.Indexed().IsZero() || lastScanned.Ignored()) {
-					lastScanned = ScanToPipe(cfg.Root, ppl, index)
+					lastScanned = ScanToPipe(config.SiteRoot, ppl, index)
 				}
 			}
 		}
@@ -96,23 +95,14 @@ func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) indexer.Re
 		if !info.IsDir() {
 			reqPath, err := filepath.Rel(fp, path)
 			if err != nil {
-				return err
+				return nil
 			}
 			reqPath = "/" + reqPath
 
 			if pipeline.ValidatePath(reqPath) {
-				body, err := ioutil.ReadFile(path)
-				if err != nil {
-					return err
-				}
-
 				record := index.Record(reqPath)
+				record.SetFullPath(path)
 				record.SetModified(info.ModTime())
-				if len(body) > 0 {
-					record.Write(body)
-				} else {
-					record.Ignore()
-				}
 				pipeline.Pipe(record)
 				last = record
 			}

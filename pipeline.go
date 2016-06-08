@@ -2,7 +2,9 @@ package search
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -20,6 +22,7 @@ func NewPipeline(config *Config, indexer indexer.Handler) (*Pipeline, error) {
 	}
 
 	pipe, err := piper.New(
+		piper.P(1, ppl.read),
 		piper.P(1, ppl.validate),
 		piper.P(1, ppl.parse),
 		piper.P(1, ppl.index),
@@ -62,18 +65,31 @@ func (p *Pipeline) Piper() piper.Handler {
 	return p.pipe
 }
 
+// validate is the step of the pipeline that reads the file content
+func (p *Pipeline) read(in interface{}) interface{} {
+	if record, ok := in.(indexer.Record); ok {
+		in, err := os.Open(record.FullPath())
+		if err != nil {
+			record.Ignore()
+			return nil
+		}
+
+		defer in.Close()
+
+		io.Copy(record, in)
+		fmt.Println(record.Path())
+
+		return record
+	}
+	return nil
+}
+
 // validate is the step of the pipeline that checks if documents are valid for
 // being indexed
 func (p *Pipeline) validate(in interface{}) interface{} {
 	if record, ok := in.(indexer.Record); ok {
-		body := record.Body()
-		if len(body) == 0 && !record.Ignored() {
-			go p.Pipe(record)
-			return nil
-		}
-
 		if p.ValidatePath(record.Path()) {
-			return in
+			return record
 		}
 		return nil
 	}
@@ -176,7 +192,7 @@ func getHTMLContent(r io.Reader, tag []byte) (result string, err error) {
 func (p *Pipeline) index(in interface{}) interface{} {
 	if record, ok := in.(indexer.Record); ok {
 		go p.indexer.Pipe(record)
-		return in
+		return record
 	}
 	return nil
 }

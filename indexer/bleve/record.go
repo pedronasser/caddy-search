@@ -10,6 +10,7 @@ import (
 type Record struct {
 	indexer  *bleveIndexer
 	path     string
+	fullPath string
 	title    string
 	document map[string]interface{}
 	body     []byte
@@ -25,6 +26,20 @@ func (r *Record) Path() string {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	return r.path
+}
+
+// FullPath returns Record's fullpath
+func (r *Record) FullPath() string {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	return r.fullPath
+}
+
+// SetFullPath defines a new fullpath for the record
+func (r *Record) SetFullPath(fp string) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	r.fullPath = fp
 }
 
 // Title returns Record's title

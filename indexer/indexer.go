@@ -22,6 +22,8 @@ type Config struct {
 type Record interface {
 	io.Writer
 	Path() string
+	FullPath() string
+	SetFullPath(string)
 	Title() string
 	SetTitle(string)
 	Body() []byte
