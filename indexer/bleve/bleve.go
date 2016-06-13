@@ -1,39 +1,48 @@
 package bleve
 
 import (
-	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/blevesearch/bleve"
-	"github.com/pedronasser/caddy-search/indexer"
 	"github.com/pedronasser/go-piper"
 )
 
-// New creates a new instance for this indexer
-func New(config indexer.Config) (*bleveIndexer, error) {
-	name := filepath.Clean(config.IndexDirectory + string(filepath.Separator) + config.HostName)
+var recordPool = sync.Pool{
+	New: func() interface{} {
+		return &Record{}
+	},
+}
 
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 0)
+	},
+}
+
+// New creates a new instance for this indexer
+func New(name string) (*bleveIndexer, error) {
 	blv, err := openIndex(name)
 	if err != nil {
 		return nil, err
 	}
 
-	indexer := &bleveIndexer{}
+	indxr := &bleveIndexer{}
 
 	pipe, err := piper.New(
-		piper.P(1, indexer.index),
+		piper.P(1, indxr.index),
 	)
 
 	if err != nil {
 		return nil, err
 	}
 
-	indexer.pipeline = pipe
-	indexer.bleve = blv
+	indxr.pipeline = pipe
+	indxr.bleve = blv
 
 	go consumeOutput(pipe)
 
-	return indexer, nil
+	return indxr, nil
 }
 
 func openIndex(name string) (bleve.Index, error) {

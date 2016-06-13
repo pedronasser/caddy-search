@@ -87,6 +87,7 @@ func (s *Search) SearchJSON(w http.ResponseWriter, r *http.Request) (int, error)
 // SearchHTML renders the search results in the HTML template
 func (s *Search) SearchHTML(w http.ResponseWriter, r *http.Request) (int, error) {
 	q := r.URL.Query().Get("q")
+
 	indexResult := s.Indexer.Search(q)
 
 	results := make([]Result, len(indexResult))

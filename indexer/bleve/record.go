@@ -70,19 +70,19 @@ func (r *Record) SetModified(mod time.Time) {
 	r.modified = mod
 }
 
-// Body returns Record's body
-func (r *Record) Body() []byte {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-	return r.body
-}
-
-// SetBody replaces Record's body
+// SetBody replaces the actual body
 func (r *Record) SetBody(body []byte) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
 	r.body = body
+}
+
+// Body returns Record's body
+func (r *Record) Body() []byte {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	return r.body
 }
 
 // Load this record from the indexer.
@@ -92,9 +92,6 @@ func (r *Record) Load() bool {
 		r.loaded = true
 		return false
 	}
-
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
 
 	result := make(map[string]interface{})
 
@@ -117,7 +114,7 @@ func (r *Record) Load() bool {
 	r.document = result
 
 	if len(r.body) == 0 {
-		r.body = result["Body"].([]byte)
+		r.Write(result["Body"].([]byte))
 	}
 
 	r.title = string(result["Title"].([]byte))

@@ -80,7 +80,8 @@ func Setup(c *caddy.Controller) (err error) {
 // ScanToPipe ...
 func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) indexer.Record {
 	var last indexer.Record
-	filepath.Walk(fp, func(path string, info os.FileInfo, err error) error {
+	absPath, _ := filepath.Abs(fp)
+	filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
 		if info.Name() == "." {
 			return nil
 		}
@@ -93,7 +94,7 @@ func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) indexer.Re
 		}
 
 		if !info.IsDir() {
-			reqPath, err := filepath.Rel(fp, path)
+			reqPath, err := filepath.Rel(absPath, path)
 			if err != nil {
 				return nil
 			}
@@ -116,13 +117,10 @@ func ScanToPipe(fp string, pipeline *Pipeline, index indexer.Handler) indexer.Re
 
 // NewIndexer creates a new Indexer with the received config
 func NewIndexer(engine string, config indexer.Config) (index indexer.Handler, err error) {
+	name := filepath.Clean(config.IndexDirectory + string(filepath.Separator) + config.HostName)
 	switch engine {
-	case "bleve":
-		index, err = bleve.New(config)
-		break
 	default:
-		index, err = bleve.New(config)
-		break
+		index, err = bleve.New(name)
 	}
 	return
 }

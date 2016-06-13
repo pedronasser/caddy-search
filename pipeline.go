@@ -2,23 +2,25 @@ package search
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"path"
 	"strings"
 	"time"
 
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/pedronasser/caddy-search/indexer"
 	"github.com/pedronasser/go-piper"
 	"golang.org/x/net/html"
 )
 
+var bm = bluemonday.UGCPolicy()
+
 // NewPipeline creates a new Pipeline instance
-func NewPipeline(config *Config, indexer indexer.Handler) (*Pipeline, error) {
+func NewPipeline(config *Config, indxr indexer.Handler) (*Pipeline, error) {
 	ppl := &Pipeline{
 		config:  config,
-		indexer: indexer,
+		indexer: indxr,
 	}
 
 	pipe, err := piper.New(
@@ -35,11 +37,16 @@ func NewPipeline(config *Config, indexer indexer.Handler) (*Pipeline, error) {
 	ppl.pipe = pipe
 
 	go func() {
-		tick := time.NewTicker(1 * time.Second)
+		tick := time.NewTicker(100 * time.Millisecond)
 		out := pipe.Output()
 		for {
 			select {
-			case <-out:
+			case in := <-out:
+				if record, ok := in.(indexer.Record); ok {
+					if record.Ignored() {
+						ppl.indexer.Kill(record)
+					}
+				}
 			case <-tick.C:
 			}
 		}
@@ -67,96 +74,57 @@ func (p *Pipeline) Piper() piper.Handler {
 
 // validate is the step of the pipeline that reads the file content
 func (p *Pipeline) read(in interface{}) interface{} {
-	if record, ok := in.(indexer.Record); ok {
+	if record, ok := in.(indexer.Record); ok && !record.Ignored() {
 		in, err := os.Open(record.FullPath())
-		if err != nil {
-			record.Ignore()
-			return nil
-		}
-
 		defer in.Close()
 
-		io.Copy(record, in)
-		fmt.Println(record.Path())
-
-		return record
+		if err != nil {
+			record.Ignore()
+		} else {
+			io.Copy(record, in)
+		}
 	}
-	return nil
+
+	return in
 }
 
 // validate is the step of the pipeline that checks if documents are valid for
 // being indexed
 func (p *Pipeline) validate(in interface{}) interface{} {
-	if record, ok := in.(indexer.Record); ok {
-		if p.ValidatePath(record.Path()) {
-			return record
+	if record, ok := in.(indexer.Record); ok && !record.Ignored() {
+		if !p.ValidatePath(record.Path()) {
+			record.Ignore()
 		}
-		return nil
 	}
-	return nil
+
+	return in
 }
 
 var titleTag = []byte("title")
 
-// stripHTML returns s without HTML tags. It is fairly
-// naive but works for most valid HTML inputs.
-func stripHTML(s []byte) []byte {
-	var buf bytes.Buffer
-	var inTag, inQuotes bool
-	var tagStart int
-	for i, ch := range s {
-		if inTag {
-			if ch == '>' && !inQuotes {
-				inTag = false
-			} else if ch == '<' && !inQuotes {
-				// false start
-				buf.Write(s[tagStart:i])
-				tagStart = i
-			} else if ch == '"' {
-				inQuotes = !inQuotes
-			}
-			continue
-		}
-		if ch == '<' {
-			inTag = true
-			tagStart = i
-			continue
-		}
-		buf.WriteByte(ch)
-	}
-	if inTag {
-		// false start
-		buf.Write(s[tagStart:])
-		inTag = false
-	}
-	return buf.Bytes()
-}
-
 // parse is the step of the pipeline that tries to parse documents and get
 // important information
 func (p *Pipeline) parse(in interface{}) interface{} {
-	if record, ok := in.(indexer.Record); ok {
-		body := bytes.NewReader(record.Body())
-		title, err := getHTMLContent(body, titleTag)
-		if err == nil {
-			// html file
-			record.SetTitle(title)
-			record.SetBody(stripHTML(record.Body()))
-			return record
-		} else if strings.HasSuffix(record.Path(), ".txt") || strings.HasSuffix(record.Path(), ".md") {
+	if record, ok := in.(indexer.Record); ok && !record.Ignored() {
+		if strings.HasSuffix(record.Path(), ".txt") || strings.HasSuffix(record.Path(), ".md") {
 			// TODO: We can improve file type detection; this is a very limited subset of indexable file types
 			// text or markdown file
 			record.SetTitle(path.Base(record.Path()))
-			record.SetBody(record.Body())
-			return record
 		} else {
-			// only accept html files
-			record.Ignore()
-			return err
+			body := bytes.NewReader(record.Body())
+			title, err := getHTMLContent(body, titleTag)
+			if err == nil {
+				// html file
+				record.SetTitle(title)
+				stripped := bm.SanitizeBytes(record.Body())
+				record.SetBody(stripped)
+			} else {
+				record.Ignore()
+			}
 		}
 	}
 
-	return nil
+	return in
 }
 
 func getHTMLContent(r io.Reader, tag []byte) (result string, err error) {
@@ -191,10 +159,11 @@ func getHTMLContent(r io.Reader, tag []byte) (result string, err error) {
 // index is the step of the pipeline that pipes valid documents to the indexer.
 func (p *Pipeline) index(in interface{}) interface{} {
 	if record, ok := in.(indexer.Record); ok {
-		go p.indexer.Pipe(record)
-		return record
+		if !record.Ignored() {
+			p.indexer.Pipe(record)
+		}
 	}
-	return nil
+	return in
 }
 
 // ValidatePath is the method that checks if the target page can be indexed

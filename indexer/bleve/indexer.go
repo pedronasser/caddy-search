@@ -1,6 +1,7 @@
 package bleve
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -25,16 +26,23 @@ type indexRecord struct {
 
 // Record method get existent or creates a new Record to be saved/updated in the indexer
 func (i *bleveIndexer) Record(path string) indexer.Record {
-	record := &Record{
-		indexer:  i,
-		path:     path,
-		title:    "",
-		document: nil,
-		body:     []byte{},
-		loaded:   false,
-		indexed:  time.Time{},
-	}
+	record := recordPool.Get().(*Record)
+	record.path = path
+	record.fullPath = ""
+	record.title = ""
+	record.document = make(map[string]interface{})
+	record.ignored = false
+	record.loaded = false
+	record.body = bufPool.Get().([]byte)
+	record.indexed = time.Time{}
+	record.modified = time.Time{}
+	record.indexer = i
 	return record
+}
+
+func (i *bleveIndexer) Kill(r indexer.Record) {
+	bufPool.Put(r.Body())
+	recordPool.Put(r)
 }
 
 // Search method lookup for records using a query
@@ -72,25 +80,25 @@ func (i *bleveIndexer) Pipe(r indexer.Record) {
 
 // index is the pipeline step that indexes the document
 func (i *bleveIndexer) index(in interface{}) interface{} {
-	var rec *Record
+	if rec, ok := in.(*Record); ok {
 
-	if _, ok := in.(*Record); ok {
-		rec = in.(*Record)
-	}
+		if rec != nil && len(rec.body) > 0 && !rec.Ignored() {
+			rec.SetIndexed(time.Now())
+			fmt.Println(rec.FullPath())
 
-	if rec != nil && len(rec.body) > 0 {
-		rec.SetIndexed(time.Now())
+			r := indexRecord{
+				Path:     rec.Path(),
+				Title:    rec.Title(),
+				Body:     string(rec.body),
+				Modified: strconv.Itoa(int(rec.Modified().Unix())),
+				Indexed:  strconv.Itoa(int(rec.Indexed().Unix())),
+			}
 
-		r := indexRecord{
-			Path:     rec.Path(),
-			Title:    rec.Title(),
-			Body:     string(rec.body),
-			Modified: strconv.Itoa(int(rec.Modified().Unix())),
-			Indexed:  strconv.Itoa(int(rec.Indexed().Unix())),
+			i.bleve.Index(rec.Path(), r)
 		}
 
-		i.bleve.Index(rec.Path(), r)
+		i.Kill(rec)
 	}
 
-	return nil
+	return in
 }

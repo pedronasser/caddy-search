@@ -10,6 +10,7 @@ type Handler interface {
 	Record(string) Record
 	Search(string) []Record
 	Pipe(Record)
+	Kill(Record)
 }
 
 // Config ...
