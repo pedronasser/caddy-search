@@ -25,7 +25,7 @@ func init() {
 
 // Setup creates a new middleware with the given configuration
 func Setup(c *caddy.Controller) (err error) {
-	cfg := httpserver.GetConfig(c.Key)
+	cfg := httpserver.GetConfig(c)
 	var config *Config
 
 	config, err = ParseSearchConfig(c, cfg)
